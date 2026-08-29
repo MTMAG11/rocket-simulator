@@ -14,6 +14,9 @@ dependencies = [
     "pandas",
     "jupyter",
     "rocketpy",
+    "Ruff",
+    "Black",
+    "Pytest",
 ]
 
 [tool.setuptools.packages.find]
