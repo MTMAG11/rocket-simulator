@@ -4,8 +4,8 @@ import matplotlib.pyplot as plt
 # time = time (s)
 # altitude = height (m)
 # velocity = velocity (m/s)
-# mass = mass (kg)
-# thrust = thrust (N)
+# mass = mass (g)
+# thrust = thrust (kN)
 # gravity = gravitational acceleration (m/s^2)
 # dt = amount of time per step (s)
 
@@ -14,23 +14,25 @@ time = 0
 altitude = 0
 velocity = 0
 mass = 10
-thrust = 0
+thrust = 10
 gravity = 9.81
 dt = 0.1
 times = []
 altitudes = []
 velocities = []
 accelerations = []
+thrusts = []
 
 def physics(thrust, mass, gravity, velocity, altitude, dt):
     acceleration = (thrust - mass * gravity) / mass
     velocity += acceleration * dt
     altitude += velocity * dt
+    thrust -= dt
 
-    return acceleration, velocity, altitude
+    return acceleration, velocity, altitude, thrust
 
 for step in range(100):
-    acceleration, velocity, altitude = physics(thrust, mass, gravity, velocity, altitude, dt)
+    acceleration, velocity, altitude, thrust = physics(thrust, mass, gravity, velocity, altitude, dt)
     time += dt
 
     if altitude < 0:
@@ -42,6 +44,7 @@ for step in range(100):
     altitudes.append(altitude)
     velocities.append(velocity)
     accelerations.append(acceleration)
+    thrusts.append(thrust)
 #    print (round(time, 2), round(altitude, 2), round(velocity, 2), round(acceleration, 2))
 
 plt.plot(times, altitudes)
