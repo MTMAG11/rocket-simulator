@@ -1,4 +1,9 @@
 import matplotlib.pyplot as plt
+from scipy.interpolate import interp1d
+import numpy as np
+from rocketpy import SolidMotor, Function
+
+
 
 # Variables: 
 # time = time (s)
@@ -20,13 +25,18 @@ propellant_mass = 50
 dry_mass = initial_mass - propellant_mass
 mass = dry_mass + propellant_mass
 
+# Thrust properties
+comments, description, data_points = SolidMotor.import_eng(
+    r"C:/Users/Rishaan/Downloads/Klima_A6.eng"
+)
+get_thrust = Function(data_points, interpolation="linear", extrapolation="constant")
+
 # Initial conditions
 time = 0
 altitude = 0
 velocity = 0
 
-# Starting thrust (artificial model for now)
-thrust = 10
+#Ground Timer
 ground_time = 0
 
 # Data storage
@@ -47,10 +57,6 @@ def physics(thrust, mass, gravity, velocity, altitude, dt):
     velocity += acceleration * dt
     altitude += velocity * dt
 
-    # Artificial thrust decrease for now
-    thrust -= dt
-    if thrust < 0:
-        thrust = 0
 
     # Stop the rocket at the ground
     if altitude <= 0 and velocity < 0:
@@ -61,6 +67,9 @@ def physics(thrust, mass, gravity, velocity, altitude, dt):
     return acceleration, velocity, altitude, thrust
 
 for step in range(1000):
+
+    thrust = float(get_thrust(time))
+
 
     # Run physics for one timestep
     acceleration, velocity, altitude, thrust = physics(
