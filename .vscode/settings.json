@@ -1,0 +1,7 @@
+{
+    "files.exclude": {
+        "**/.venv": true,
+        "**/.gitignore": true,
+        "**/rocket_simulator.egg-info": true
+    }
+}
