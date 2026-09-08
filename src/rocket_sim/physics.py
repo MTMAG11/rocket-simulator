@@ -1,14 +1,10 @@
 def physics(thrust, mass, gravity, velocity, altitude, dt):
+    mass_kg = mass / 1000
 
-    # Calculate acceleration from net force / mass
-    acceleration = (thrust - (mass/1000) * gravity) / (mass/1000)
-
-    # Update velocity and altitude
+    acceleration = (thrust - mass_kg * gravity) / mass_kg
     velocity += acceleration * dt
     altitude += velocity * dt
 
-
-    # Stop the rocket at the ground
     if altitude <= 0 and velocity < 0:
         altitude = 0
         velocity = 0
