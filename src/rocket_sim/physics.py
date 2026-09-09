@@ -5,9 +5,10 @@ def physics(thrust, mass, gravity, velocity, altitude, dt):
     velocity += acceleration * dt
     altitude += velocity * dt
 
-    if altitude <= 0 and velocity < 0:
-        altitude = 0
-        velocity = 0
-        acceleration = 0
+    ground_contact = False
 
-    return acceleration, velocity, altitude, thrust
+    if altitude <= 0 and velocity < 0:
+        ground_contact = True
+        altitude = 0
+
+    return acceleration, velocity, altitude, thrust, ground_contact
