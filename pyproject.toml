@@ -17,6 +17,7 @@ dependencies = [
     "Ruff",
     "Black",
     "Pytest",
+    "PySide6",
 ]
 
 [tool.setuptools.packages.find]
