@@ -87,3 +87,6 @@ def get_propellant_mass(time):
     fraction_consumed = impulse_used / total_impulse
 
     return propellant_mass * (1 - fraction_consumed)
+
+def get_available_motors():
+    return sorted(motor_directory.glob("*.eng"))
