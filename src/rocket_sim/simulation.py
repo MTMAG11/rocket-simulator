@@ -8,7 +8,7 @@ from motor import (
     get_propellant_mass,
 )
 
-def run_simulation():
+def run_simulation(config):
     # Variables: 
     # time = time (s)
     # altitude = height (m)
@@ -19,11 +19,11 @@ def run_simulation():
     # dt = amount of time per step (s)
 
     # Simulation parameters
-    gravity = 9.81
-    dt = 0.005
+    gravity = config.gravity
+    dt = config.dt
 
     # Mass properties
-    rocket_dry_mass = 150  # g
+    rocket_dry_mass = config.rocket_dry_mass
     propellant_mass = initial_propellant_mass
     dry_mass = rocket_dry_mass + dry_motor_mass
     mass = dry_mass + propellant_mass
