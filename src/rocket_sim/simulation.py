@@ -1,12 +1,5 @@
-from physics import physics
-from plotting import plot_results
-from motor import (
-    get_thrust,
-    propellant_mass as initial_propellant_mass,
-    dry_motor_mass,
-    burn_time,
-    get_propellant_mass,
-)
+from .physics import physics
+from .motor import load_motor
 
 def run_simulation(config):
     # Variables: 
@@ -22,10 +15,13 @@ def run_simulation(config):
     gravity = config.gravity
     dt = config.dt
 
+    # Load motor data
+    motor = load_motor(config.motor)
+
     # Mass properties
     rocket_dry_mass = config.rocket_dry_mass
-    propellant_mass = initial_propellant_mass
-    dry_mass = rocket_dry_mass + dry_motor_mass
+    propellant_mass = motor.propellant_mass
+    dry_mass = rocket_dry_mass + motor.dry_motor_mass
     mass = dry_mass + propellant_mass
 
     # Initial conditions
@@ -68,7 +64,7 @@ def run_simulation(config):
     while True:
 
 
-        thrust = float(get_thrust(time))
+        thrust = float(motor.thrust(time))
 
 
         # Run physics for one timestep
@@ -93,7 +89,7 @@ def run_simulation(config):
 
 
         # Retrieve data
-        if time >= burn_time and burnout_time is None:
+        if time >= motor.burn_time and burnout_time is None:
             burnout_time = time
             burnout_altitude = altitude
             burnout_velocity = velocity
@@ -112,7 +108,7 @@ def run_simulation(config):
 
 
         # Burn propellant based on thrust curve
-        propellant_mass = get_propellant_mass(time)
+        propellant_mass = motor.get_propellant_mass(time)
 
         # Update current total mass
         mass = dry_mass + propellant_mass
@@ -157,15 +153,3 @@ def run_simulation(config):
     }
 
     return simulation_results
-
-if __name__ == "__main__":
-    simulation_results = run_simulation()
-
-    plot_results(
-        simulation_results["times"],
-        simulation_results["altitudes"],
-        simulation_results["velocities"],
-        simulation_results["accelerations"],
-        simulation_results["thrusts"],
-        simulation_results["twrs"],
-    )
