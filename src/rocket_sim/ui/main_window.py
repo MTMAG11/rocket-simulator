@@ -180,27 +180,27 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
         self.graph_stack.addWidget(
-            self.create_placeholder_graph("Velocity")
+            self.create_velocity_graph()
         )
 
         self.graph_stack.addWidget(
-            self.create_placeholder_graph("Acceleration")
+            self.create_acceleration_graph()
         )
 
         self.graph_stack.addWidget(
-            self.create_placeholder_graph("G-Force")
+            self.create_g_force_graph()
         )
 
         self.graph_stack.addWidget(
-            self.create_placeholder_graph("Thrust")
+            self.create_thrust_graph()
         )
 
         self.graph_stack.addWidget(
-            self.create_placeholder_graph("TWR")
+            self.create_twr_graph()
         )
 
         self.graph_stack.addWidget(
-            self.create_placeholder_graph("All")
+            self.create_all_graph()
         )
 
         graphs_layout.addLayout(navigation)
@@ -244,19 +244,280 @@ class MainWindow(QtWidgets.QMainWindow):
 
         return widget
 
-    def create_placeholder_graph(self, name):
+    def create_velocity_graph(self):
         widget = QtWidgets.QWidget()
         layout = QtWidgets.QVBoxLayout()
 
-        label = QtWidgets.QLabel(
-            f"{name}\nComing later"
+        self.velocity_figure = Figure()
+        self.velocity_canvas = FigureCanvas(self.velocity_figure)
+
+        self.velocity_ax = self.velocity_figure.add_subplot(111)
+
+        self.velocity_ax.set_title("Velocity")
+        self.velocity_ax.set_xlabel("Time (s)")
+        self.velocity_ax.set_ylabel("Velocity (m/s)")
+        self.velocity_ax.grid(True)
+
+        self.velocity_line, = self.velocity_ax.plot(
+            [],
+            [],
         )
 
-        label.setAlignment(
-            Qt.AlignmentFlag.AlignCenter
+        self.velocity_marker, = self.velocity_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
         )
 
-        layout.addWidget(label)
+        layout.addWidget(self.velocity_canvas)
+
+        widget.setLayout(layout)
+
+        return widget
+
+    def create_acceleration_graph(self):
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+
+        self.acceleration_figure = Figure()
+        self.acceleration_canvas = FigureCanvas(
+            self.acceleration_figure
+        )
+
+        self.acceleration_ax = self.acceleration_figure.add_subplot(111)
+
+        self.acceleration_ax.set_title("Acceleration")
+        self.acceleration_ax.set_xlabel("Time (s)")
+        self.acceleration_ax.set_ylabel("Acceleration (m/s²)")
+        self.acceleration_ax.grid(True)
+
+        self.acceleration_line, = self.acceleration_ax.plot(
+            [],
+            [],
+        )
+
+        self.acceleration_marker, = self.acceleration_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        layout.addWidget(self.acceleration_canvas)
+
+        widget.setLayout(layout)
+
+        return widget
+
+    def create_g_force_graph(self):
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+
+        self.g_force_figure = Figure()
+        self.g_force_canvas = FigureCanvas(
+            self.g_force_figure
+        )
+
+        self.g_force_ax = self.g_force_figure.add_subplot(111)
+
+        self.g_force_ax.set_title("G-Force")
+        self.g_force_ax.set_xlabel("Time (s)")
+        self.g_force_ax.set_ylabel("G-Force (g)")
+        self.g_force_ax.grid(True)
+
+        self.g_force_line, = self.g_force_ax.plot(
+            [],
+            [],
+        )
+
+        self.g_force_marker, = self.g_force_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        layout.addWidget(self.g_force_canvas)
+
+        widget.setLayout(layout)
+
+        return widget
+
+    def create_thrust_graph(self):
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+
+        self.thrust_figure = Figure()
+        self.thrust_canvas = FigureCanvas(
+            self.thrust_figure
+        )
+
+        self.thrust_ax = self.thrust_figure.add_subplot(111)
+
+        self.thrust_ax.set_title("Thrust")
+        self.thrust_ax.set_xlabel("Time (s)")
+        self.thrust_ax.set_ylabel("Thrust (N)")
+        self.thrust_ax.grid(True)
+
+        self.thrust_line, = self.thrust_ax.plot(
+            [],
+            [],
+        )
+
+        self.thrust_marker, = self.thrust_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        layout.addWidget(self.thrust_canvas)
+
+        widget.setLayout(layout)
+
+        return widget
+
+    def create_twr_graph(self):
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+
+        self.twr_figure = Figure()
+        self.twr_canvas = FigureCanvas(
+            self.twr_figure
+        )
+
+        self.twr_ax = self.twr_figure.add_subplot(111)
+
+        self.twr_ax.set_title("Thrust-to-Weight Ratio")
+        self.twr_ax.set_xlabel("Time (s)")
+        self.twr_ax.set_ylabel("TWR")
+        self.twr_ax.grid(True)
+
+        self.twr_line, = self.twr_ax.plot(
+            [],
+            [],
+        )
+
+        self.twr_marker, = self.twr_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        layout.addWidget(self.twr_canvas)
+
+        widget.setLayout(layout)
+
+        return widget
+
+    def create_all_graph(self):
+        widget = QtWidgets.QWidget()
+        layout = QtWidgets.QVBoxLayout()
+
+        self.all_figure = Figure()
+
+        self.all_axes = self.all_figure.subplots(
+            3,
+            2,
+        )
+
+        (
+            self.all_altitude_ax,
+            self.all_velocity_ax,
+        ) = self.all_axes[0]
+
+        (
+            self.all_acceleration_ax,
+            self.all_g_force_ax,
+        ) = self.all_axes[1]
+
+        (
+            self.all_thrust_ax,
+            self.all_twr_ax,
+        ) = self.all_axes[2]
+
+        self.all_altitude_line, = self.all_altitude_ax.plot([], [])
+        self.all_velocity_line, = self.all_velocity_ax.plot([], [])
+        self.all_acceleration_line, = self.all_acceleration_ax.plot([], [])
+        self.all_g_force_line, = self.all_g_force_ax.plot([], [])
+        self.all_thrust_line, = self.all_thrust_ax.plot([], [])
+        self.all_twr_line, = self.all_twr_ax.plot([], [])
+
+        self.all_altitude_marker, = self.all_altitude_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        self.all_velocity_marker, = self.all_velocity_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        self.all_acceleration_marker, = self.all_acceleration_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        self.all_g_force_marker, = self.all_g_force_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        self.all_thrust_marker, = self.all_thrust_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        self.all_twr_marker, = self.all_twr_ax.plot(
+            [],
+            [],
+            marker="o",
+            linestyle="",
+        )
+
+        self.all_altitude_ax.set_title("Altitude")
+        self.all_altitude_ax.set_ylabel("m")
+        self.all_altitude_ax.grid(True)
+
+        self.all_velocity_ax.set_title("Velocity")
+        self.all_velocity_ax.set_ylabel("m/s")
+        self.all_velocity_ax.grid(True)
+
+        self.all_acceleration_ax.set_title("Acceleration")
+        self.all_acceleration_ax.set_ylabel("m/s²")
+        self.all_acceleration_ax.grid(True)
+
+        self.all_g_force_ax.set_title("G-Force")
+        self.all_g_force_ax.set_ylabel("g")
+        self.all_g_force_ax.grid(True)
+
+        self.all_thrust_ax.set_title("Thrust")
+        self.all_thrust_ax.set_ylabel("N")
+        self.all_thrust_ax.set_xlabel("Time (s)")
+        self.all_thrust_ax.grid(True)
+
+        self.all_twr_ax.set_title("TWR")
+        self.all_twr_ax.set_ylabel("Ratio")
+        self.all_twr_ax.set_xlabel("Time (s)")
+        self.all_twr_ax.grid(True)
+
+        self.all_figure.tight_layout()
+
+        self.all_canvas = FigureCanvas(self.all_figure)
+
+        layout.addWidget(self.all_canvas)
 
         widget.setLayout(layout)
 
@@ -486,6 +747,15 @@ class MainWindow(QtWidgets.QMainWindow):
 
         times = self.results["times"]
         altitudes = self.results["altitudes"]
+        velocities = self.results["velocities"]
+        accelerations = self.results["accelerations"]
+        thrusts = self.results["thrusts"]
+        twrs = self.results["twrs"]
+
+        g_forces = [
+            acceleration / 9.80665
+            for acceleration in accelerations
+        ]
 
         self.altitude_line.set_data(
             times,
@@ -495,7 +765,101 @@ class MainWindow(QtWidgets.QMainWindow):
         self.altitude_ax.relim()
         self.altitude_ax.autoscale_view()
 
+        self.velocity_line.set_data(
+            times,
+            velocities,
+        )
+
+        self.velocity_ax.relim()
+        self.velocity_ax.autoscale_view()
+
+        self.acceleration_line.set_data(
+            times,
+            accelerations,
+        )
+
+        self.acceleration_ax.relim()
+        self.acceleration_ax.autoscale_view()
+
+        self.g_force_line.set_data(
+            times,
+            g_forces,
+        )
+
+        self.g_force_ax.relim()
+        self.g_force_ax.autoscale_view()
+
+        self.thrust_line.set_data(
+            times,
+            thrusts,
+        )
+
+        self.thrust_ax.relim()
+        self.thrust_ax.autoscale_view()
+
+        self.twr_line.set_data(
+            times,
+            twrs,
+        )
+
+        self.twr_ax.relim()
+        self.twr_ax.autoscale_view()
+
+        self.all_altitude_line.set_data(
+            times,
+            altitudes,
+        )
+
+        self.all_velocity_line.set_data(
+            times,
+            velocities,
+        )
+
+        self.all_acceleration_line.set_data(
+            times,
+            accelerations,
+        )
+
+        self.all_g_force_line.set_data(
+            times,
+            g_forces,
+        )
+
+        self.all_thrust_line.set_data(
+            times,
+            thrusts,
+        )
+
+        self.all_twr_line.set_data(
+            times,
+            twrs,
+        )
+
+        self.all_altitude_ax.relim()
+        self.all_altitude_ax.autoscale_view()
+
+        self.all_velocity_ax.relim()
+        self.all_velocity_ax.autoscale_view()
+
+        self.all_acceleration_ax.relim()
+        self.all_acceleration_ax.autoscale_view()
+
+        self.all_g_force_ax.relim()
+        self.all_g_force_ax.autoscale_view()
+
+        self.all_thrust_ax.relim()
+        self.all_thrust_ax.autoscale_view()
+
+        self.all_twr_ax.relim()
+        self.all_twr_ax.autoscale_view()
+
         self.canvas.draw_idle()
+        self.velocity_canvas.draw_idle()
+        self.acceleration_canvas.draw_idle()
+        self.g_force_canvas.draw_idle()
+        self.thrust_canvas.draw_idle()
+        self.twr_canvas.draw_idle()
+        self.all_canvas.draw_idle()
 
     def update_time_cursor(self, index):
         if self.results is None:
@@ -503,6 +867,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
         times = self.results["times"]
         altitudes = self.results["altitudes"]
+        velocities = self.results["velocities"]
+        accelerations = self.results["accelerations"]
+        thrusts = self.results["thrusts"]
+        twrs = self.results["twrs"]
 
         if not times:
             return
@@ -513,7 +881,13 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
         current_time = times[index]
+
         current_altitude = altitudes[index]
+        current_velocity = velocities[index]
+        current_acceleration = accelerations[index]
+        current_g_force = current_acceleration / 9.80665
+        current_thrust = thrusts[index]
+        current_twr = twrs[index]
 
         self.current_time.setText(
             f"{current_time:.2f} s"
@@ -524,7 +898,68 @@ class MainWindow(QtWidgets.QMainWindow):
             [current_altitude],
         )
 
+        self.velocity_marker.set_data(
+            [current_time],
+            [current_velocity],
+        )
+
+        self.acceleration_marker.set_data(
+            [current_time],
+            [current_acceleration],
+        )
+
+        self.g_force_marker.set_data(
+            [current_time],
+            [current_g_force],
+        )
+
+        self.thrust_marker.set_data(
+            [current_time],
+            [current_thrust],
+        )
+
+        self.twr_marker.set_data(
+            [current_time],
+            [current_twr],
+        )
+
+        self.all_altitude_marker.set_data(
+            [current_time],
+            [current_altitude],
+        )
+
+        self.all_velocity_marker.set_data(
+            [current_time],
+            [current_velocity],
+        )
+
+        self.all_acceleration_marker.set_data(
+            [current_time],
+            [current_acceleration],
+        )
+
+        self.all_g_force_marker.set_data(
+            [current_time],
+            [current_g_force],
+        )
+
+        self.all_thrust_marker.set_data(
+            [current_time],
+            [current_thrust],
+        )
+
+        self.all_twr_marker.set_data(
+            [current_time],
+            [current_twr],
+        )
+
         self.canvas.draw_idle()
+        self.velocity_canvas.draw_idle()
+        self.acceleration_canvas.draw_idle()
+        self.g_force_canvas.draw_idle()
+        self.thrust_canvas.draw_idle()
+        self.twr_canvas.draw_idle()
+        self.all_canvas.draw_idle()
 
     def select_graph(self, index):
         self.graph_stack.setCurrentIndex(index)
@@ -534,6 +969,10 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def reset_simulation(self):
         self.results = None
+
+        self.dry_mass_input.setValue(150)
+        self.gravity_input.setValue(9.81)
+        self.timestep_input.setValue(0.005)
 
         self.max_altitude.setText("-- m")
         self.max_velocity.setText("-- m/s")
@@ -553,10 +992,78 @@ class MainWindow(QtWidgets.QMainWindow):
         self.altitude_line.set_data([], [])
         self.altitude_marker.set_data([], [])
 
+        self.velocity_line.set_data([], [])
+        self.velocity_marker.set_data([], [])
+
+        self.acceleration_line.set_data([], [])
+        self.acceleration_marker.set_data([], [])
+
+        self.g_force_line.set_data([], [])
+        self.g_force_marker.set_data([], [])
+
+        self.thrust_line.set_data([], [])
+        self.thrust_marker.set_data([], [])
+
+        self.twr_line.set_data([], [])
+        self.twr_marker.set_data([], [])
+
+        self.all_altitude_line.set_data([], [])
+        self.all_velocity_line.set_data([], [])
+        self.all_acceleration_line.set_data([], [])
+        self.all_g_force_line.set_data([], [])
+        self.all_thrust_line.set_data([], [])
+        self.all_twr_line.set_data([], [])
+
+        self.all_altitude_marker.set_data([], [])
+        self.all_velocity_marker.set_data([], [])
+        self.all_acceleration_marker.set_data([], [])
+        self.all_g_force_marker.set_data([], [])
+        self.all_thrust_marker.set_data([], [])
+        self.all_twr_marker.set_data([], [])
+
         self.altitude_ax.relim()
         self.altitude_ax.autoscale_view()
 
+        self.velocity_ax.relim()
+        self.velocity_ax.autoscale_view()
+
+        self.acceleration_ax.relim()
+        self.acceleration_ax.autoscale_view()
+
+        self.g_force_ax.relim()
+        self.g_force_ax.autoscale_view()
+
+        self.thrust_ax.relim()
+        self.thrust_ax.autoscale_view()
+
+        self.twr_ax.relim()
+        self.twr_ax.autoscale_view()
+
+        self.all_altitude_ax.relim()
+        self.all_altitude_ax.autoscale_view()
+
+        self.all_velocity_ax.relim()
+        self.all_velocity_ax.autoscale_view()
+
+        self.all_acceleration_ax.relim()
+        self.all_acceleration_ax.autoscale_view()
+
+        self.all_g_force_ax.relim()
+        self.all_g_force_ax.autoscale_view()
+
+        self.all_thrust_ax.relim()
+        self.all_thrust_ax.autoscale_view()
+
+        self.all_twr_ax.relim()
+        self.all_twr_ax.autoscale_view()
+
         self.canvas.draw_idle()
+        self.velocity_canvas.draw_idle()
+        self.acceleration_canvas.draw_idle()
+        self.g_force_canvas.draw_idle()
+        self.thrust_canvas.draw_idle()
+        self.twr_canvas.draw_idle()
+        self.all_canvas.draw_idle()
 
         self.statusBar().showMessage("Reset")
 
