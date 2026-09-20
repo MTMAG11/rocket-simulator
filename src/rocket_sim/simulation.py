@@ -1,17 +1,10 @@
 from .physics import physics
 from .motor import load_motor
+from .state import RocketState
+
 
 def run_simulation(config):
-    # Variables: 
-    # time = time (s)
-    # altitude = height (m)
-    # velocity = velocity (m/s)
-    # mass = mass (g)
-    # thrust = thrust (N)
-    # gravity = gravitational acceleration (m/s^2)
-    # dt = amount of time per step (s)
-
-    # Simulation parameters
+    # Variables
     gravity = config.gravity
     dt = config.dt
 
@@ -24,25 +17,25 @@ def run_simulation(config):
     dry_mass = rocket_dry_mass + motor.dry_motor_mass
     mass = dry_mass + propellant_mass
 
-    # Initial conditions
+    # Initial state
+    state = RocketState()
+
     time = 0
-    altitude = 0
-    velocity = 0
 
     flight_started = False
 
-    #Ground Timer
-    ground_time = 0
-
     # Data storage
-    # Values from each timestep are stored for plotting
     times = []
-    altitudes = []
-    velocities = []
-    accelerations = []
+    xs = []
+    ys = []
+    vxs = []
+    vys = []
+    axs = []
+    ays = []
     thrusts = []
     twrs = []
 
+    # Flight events
     burnout_time = None
     burnout_altitude = None
     burnout_velocity = None
@@ -50,93 +43,92 @@ def run_simulation(config):
     apogee_time = None
     apogee_altitude = None
 
+    # Maximum values
     max_velocity = 0
     max_velocity_time = None
 
     max_acceleration = 0
     max_acceleration_time = None
 
-    landing_time = None
-    landing_velocity = None
-
-
-
     while True:
-
-
         thrust = float(motor.thrust(time))
 
-
-        # Run physics for one timestep
-        acceleration, velocity, altitude, thrust, ground_contact = physics(
-            thrust, mass, gravity, velocity, altitude, dt
-            )
-
+        # Run physics
+        state = physics(
+            thrust,
+            mass,
+            gravity,
+            state,
+            dt,
+        )
 
         time += dt
 
-
-        if altitude > 0 or velocity > 0:
+        # Flight detection
+        if state.y > 0 or state.vy > 0:
             flight_started = True
 
+        # Calculate velocity
+        velocity = (state.vx**2 + state.vy**2) ** 0.5
 
-        if flight_started and ground_contact and landing_time is None:
-            landing_time = time
-            landing_velocity = velocity
+        # Calculate acceleration
+        acceleration = (state.ax**2 + state.ay**2) ** 0.5
 
-        if ground_contact:
-            velocity = 0
-
-
-        # Retrieve data
+        # Burnout
         if time >= motor.burn_time and burnout_time is None:
             burnout_time = time
-            burnout_altitude = altitude
+            burnout_altitude = state.y
             burnout_velocity = velocity
 
-        if flight_started and velocity <= 0 and apogee_time is None:
+        # Apogee
+        if flight_started and state.vy <= 0 and apogee_time is None:
             apogee_time = time
-            apogee_altitude = altitude
+            apogee_altitude = state.y
 
+        # Maximum velocity
         if velocity > max_velocity:
             max_velocity = velocity
             max_velocity_time = time
 
+        # Maximum acceleration
         if apogee_time is None and acceleration > max_acceleration:
             max_acceleration = acceleration
             max_acceleration_time = time
 
-
-        # Burn propellant based on thrust curve
+        # Burn propellant
         propellant_mass = motor.get_propellant_mass(time)
 
-        # Update current total mass
+        # Update mass
         mass = dry_mass + propellant_mass
 
         # Calculate thrust-to-weight ratio
-        weight = (mass/1000) * gravity
+        weight = (mass / 1000) * gravity
         twr = thrust / weight
 
-        # Stop after the rocket has been on the ground for 5 seconds
-        if altitude == 0 and velocity == 0:
-            ground_time += dt
-            if ground_time >= 5:
-                break
-
-        
-        # Store results for plotting
+        # Store results
         times.append(time)
-        altitudes.append(altitude)
-        velocities.append(velocity)
-        accelerations.append(acceleration)
+        xs.append(state.x)
+        ys.append(state.y)
+        vxs.append(state.vx)
+        vys.append(state.vy)
+        axs.append(state.ax)
+        ays.append(state.ay)
         thrusts.append(thrust)
         twrs.append(twr)
 
+        # Temporary stop condition
+        if time >= motor.burn_time + 20:
+            break
+
+    # Simulation results
     simulation_results = {
         "times": times,
-        "altitudes": altitudes,
-        "velocities": velocities,
-        "accelerations": accelerations,
+        "xs": xs,
+        "ys": ys,
+        "vxs": vxs,
+        "vys": vys,
+        "axs": axs,
+        "ays": ays,
         "thrusts": thrusts,
         "twrs": twrs,
         "burnout_time": burnout_time,
@@ -148,8 +140,6 @@ def run_simulation(config):
         "max_velocity_time": max_velocity_time,
         "max_acceleration": max_acceleration,
         "max_acceleration_time": max_acceleration_time,
-        "landing_time": landing_time,
-        "landing_velocity": landing_velocity,
     }
 
     return simulation_results
