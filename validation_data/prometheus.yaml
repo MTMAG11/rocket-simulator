@@ -1,0 +1,22 @@
+name: prometheus_2022
+description: Prometheus, Spaceport America, 24 Jun 2022, Cesaroni M1520, AltOS TeleMetrum log
+sim_config: prometheus_sim.yaml
+source:
+  name: Prometheus team via RocketPy example data
+  url: https://github.com/RocketPy-Team/RocketPy/tree/master/data/rockets/prometheus
+  quality: "university team; commercial flight computer (AltOS TeleMetrum, baro+accel Kalman-filtered height and speed); parameters from a secondary source (RocketPy docs)"
+  motor: Cesaroni M1520-BS (ThrustCurve.org file bundled with RocketPy)
+  known_uncertainties: "wind and temperature profile unknown; Von Karman nose approximated; AltOS speed is a filtered estimate"
+telemetry:
+  file: raw/2022-06-24-serial-5115-flight-0001-TeleMetrum.csv
+  # AltOS height is barometric and lags during boost (bay pressure lag), so time is aligned on the
+  # (signed, vertical) velocity channel instead of altitude: both cross 50 m/s together.
+  align_channel: velocity_z
+  align_threshold: 50
+  launch_threshold_altitude_m: 15
+  landing_altitude_m: 5
+  channels:
+    altitude: {time_column: 4, column: 10, uncertainty: 3.0}
+    # AltOS 'speed' column is SIGNED VERTICAL velocity (min -38 m/s on descent, 0 at apogee, trapezoid integral to
+    # apogee = 4175 m): verified by the third critic review, an earlier version of this file wrongly treated it as total speed
+    velocity_z: {time_column: 4, column: 11, uncertainty: 2.0}

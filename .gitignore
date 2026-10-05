@@ -6,3 +6,7 @@ __pycache__/
 .vscode/*
 !.vscode/settings.json
 *.egg-info/
+output/
+
+.mypy_cache/
+.ruff_cache/

@@ -1,0 +1,26 @@
+# Monte-Carlo batch of full telemetry. Run:  rocketsim batch configs/batch_example.yaml --runs 40
+name: mc-demo
+base_config: example_g80.yaml
+master_seed: 2024
+shard_runs: 10
+workers: 0
+overrides: {fidelity: 3}
+splits:
+  train: {runs: 20}
+parameters:
+  - {path: rocket.dry_mass_kg,            dist: normal,  rel_std: 0.03}        # build tolerance
+  - {path: rocket.cg_from_nose_m,         dist: normal,  std: 0.005}
+  - {path: rocket.aero.drag_scale,        dist: lognormal, median: 1.0, sigma: 0.08}   # Cd uncertainty
+  - {path: motor.thrust_scale,            dist: truncnormal, mean: 1.0, std: 0.03, low: 0.9, high: 1.1}
+  - {path: launch.elevation_deg,          dist: uniform, low: 84, high: 90}
+  - {path: launch.azimuth_deg,            dist: uniform, low: 0, high: 360}
+  - {path: environment.wind.model,        dist: choice,  values: [constant]}
+  - {path: environment.wind.speed_ms,     dist: uniform, low: 0, high: 8}
+  - {path: environment.wind.direction_from_deg, dist: uniform, low: 0, high: 360}
+  - {path: environment.wind.turbulence_sigma_ms, dist: uniform, low: 0, high: 1.5}
+  - {path: environment.atmosphere.temperature_offset_k, dist: normal, mean: 0, std: 8}
+  - {path: environment.atmosphere.sea_level_pressure_pa, dist: normal, mean: 101325, std: 600}
+  - {path: motor.misalignment_deg.0,      dist: normal,  mean: 0, std: 0.15}
+  - {path: motor.misalignment_deg.1,      dist: normal,  mean: 0, std: 0.15}
+dataset: {kind: telemetry}
+output_dir: output/mc-demo

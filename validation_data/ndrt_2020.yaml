@@ -1,0 +1,16 @@
+name: ndrt_2020
+description: Notre Dame Rocket Team, Three Oaks MI, 23 Feb 2020, Cesaroni L1395
+sim_config: ndrt_2020_sim.yaml
+source:
+  name: Notre Dame Rocket Team via RocketPy example data
+  url: https://github.com/RocketPy-Team/RocketPy/tree/master/data/rockets/NDRT_2020
+  quality: "university team; altimeter altitude (ft AGL, ~20 Hz) and axial accelerometer (400 Hz); parameters from a secondary source (RocketPy docs); permission to use given by the team (B. Mumma, 2020). Team-reported apogee 4320 ft."
+  motor: Cesaroni L1395-BS (ThrustCurve.org file bundled with RocketPy)
+  known_uncertainties: "two-diameter airframe not representable, wind/atmosphere unknown, accel sensor axis/offset calibration unknown"
+telemetry:
+  file: raw/ndrt_2020_flight_data.csv
+  launch_threshold_altitude_m: 15
+  landing_altitude_m: 5
+  channels:
+    altitude: {time_column: 3, column: 4, scale: 0.3048, uncertainty: 1.0}
+    accel_axial: {time_column: 0, column: 1, scale: 9.80665, uncertainty: 1.0}

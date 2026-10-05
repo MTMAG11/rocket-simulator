@@ -1,0 +1,16 @@
+name: epfl_bella_lui_2020
+description: EPFL Rocket Team Bella Lui, Kaltbrunn, 22 Feb 2020, AeroTech K828FJ
+sim_config: bella_lui_sim.yaml
+source:
+  name: EPFL Rocket Team via RocketPy example data
+  url: https://github.com/RocketPy-Team/RocketPy/tree/master/data/rockets/EPFL_Bella_Lui
+  quality: "university team, altimeter-derived altitude/velocity (filtered), parameters from a secondary source (RocketPy docs); permission to use given by the team (A. Scardigli, 2020)"
+  motor: AeroTech K828FJ (ThrustCurve.org file bundled with RocketPy)
+  known_uncertainties: "atmosphere (ERA5 not available here), wind unknown, mass +-0.1 kg, Cd unknown, filtered velocity may lag"
+telemetry:
+  file: raw/bella_lui_flight_data_filtered.csv
+  launch_threshold_altitude_m: 15
+  landing_altitude_m: 5
+  channels:
+    altitude: {time_column: 2, column: 3, uncertainty: 2.0}
+    velocity_z: {time_column: 2, column: 4, uncertainty: 2.0}

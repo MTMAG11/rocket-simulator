@@ -1,47 +1,89 @@
-import matplotlib.pyplot as plt
+"""Matplotlib figures for flight records (used by the CLI, validation reports and the GUI)."""
 
-def plot_results(times, altitudes, velocities, accelerations, thrusts, twrs):
-    # Create subplots
-    fig, axs = plt.subplots(3, 2, figsize=(12, 10))
-    fig.suptitle('Rocket Simulation Results', fontsize=16)
+from __future__ import annotations
 
-    # Plot Altitude vs Time
-    axs[0, 0].plot(times, altitudes, color='blue')
-    axs[0, 0].set_title('Altitude vs Time')
-    axs[0, 0].set_xlabel('Time (s)')
-    axs[0, 0].set_ylabel('Altitude (m)')
-    axs[0, 0].grid()
+import numpy as np
+from matplotlib.figure import Figure
 
-    # Plot Velocity vs Time
-    axs[0, 1].plot(times, velocities, color='green')
-    axs[0, 1].set_title('Velocity vs Time')
-    axs[0, 1].set_xlabel('Time (s)')
-    axs[0, 1].set_ylabel('Velocity (m/s)')
-    axs[0, 1].grid()
+from .constants import G0
+from .simulation.record import FlightRecord
 
-    # Plot Acceleration vs Time
-    axs[1, 0].plot(times, accelerations, color='red')
-    axs[1, 0].set_title('Acceleration vs Time')
-    axs[1, 0].set_xlabel('Time (s)')
-    axs[1, 0].set_ylabel('Acceleration (m/s²)')
-    axs[1, 0].grid()
+# Okabe-Ito colour-blind-safe palette
+COLORS = ["#0072B2", "#D55E00", "#009E73", "#CC79A7", "#E69F00", "#56B4E9", "#000000"]
 
-    # Plot Thrust vs Time
-    axs[1, 1].plot(times, thrusts, color='orange')
-    axs[1, 1].set_title('Thrust vs Time')
-    axs[1, 1].set_xlabel('Time (s)')
-    axs[1, 1].set_ylabel('Thrust (N)')
-    axs[1, 1].grid()
+EVENT_STYLE = {
+    "rail_exit": ("rail exit", "#999999"),
+    "burnout": ("burnout", "#D55E00"),
+    "apogee": ("apogee", "#009E73"),
+    "parachute_deploy": ("chute", "#CC79A7"),
+    "landing": ("landing", "#000000"),
+}
 
-    # Plot TWR vs Time
-    axs[2, 0].plot(times, twrs, color='purple')
-    axs[2, 0].set_title('Thrust-to-Weight Ratio vs Time')
-    axs[2, 0].set_xlabel('Time (s)')
-    axs[2, 0].set_ylabel('TWR')
-    axs[2, 0].grid()
 
-    # Hide the empty subplot
-    fig.delaxes(axs[2][1])
+def mark_events(ax, rec: FlightRecord, labels: bool = False) -> None:
+    ymax = ax.get_ylim()[1]
+    for e in rec.events:
+        if e.name in EVENT_STYLE:
+            text, col = EVENT_STYLE[e.name]
+            ax.axvline(e.t, color=col, lw=0.8, ls=":", alpha=0.8)
+            if labels:
+                ax.text(e.t, ymax, text, rotation=90, va="top", ha="right", fontsize=7, color=col)
 
-    plt.tight_layout(rect=[0, 0.03, 1, 0.95])
-    plt.show()
+
+def plot_overview(rec: FlightRecord) -> Figure:
+    t = rec.col("t")
+    fig = Figure(figsize=(13, 9), layout="constrained")
+    axs = fig.subplots(3, 3)
+    a = axs.ravel()
+
+    def panel(i, ys, title, ylabel):
+        ax = a[i]
+        for lab, y, col in ys:
+            ax.plot(t, y, color=col, lw=1.2, label=lab)
+        ax.set_title(title, fontsize=10)
+        ax.set_ylabel(ylabel)
+        ax.set_xlabel("time [s]")
+        ax.grid(alpha=0.3)
+        if len(ys) > 1:
+            ax.legend(fontsize=7, frameon=False)
+        mark_events(ax, rec)
+
+    panel(0, [("altitude AGL", rec.col("altitude"), COLORS[0])], "Altitude", "m")
+    panel(
+        1,
+        [("speed", rec.col("speed"), COLORS[0]), ("vertical", rec.col("vel_z"), COLORS[1])],
+        "Velocity",
+        "m/s",
+    )
+    sf = np.linalg.norm(np.stack([rec.col("acc_x"), rec.col("acc_y"), rec.col("acc_z") + G0]), axis=0) / G0
+    panel(2, [("|specific force|", sf, COLORS[0])], "Load factor", "g")
+    panel(3, [("thrust", rec.col("thrust"), COLORS[1])], "Thrust", "N")
+    panel(4, [("mass", rec.col("mass"), COLORS[2])], "Mass", "kg")
+    panel(
+        5,
+        [("drag", rec.col("drag"), COLORS[1]), ("lift", rec.col("lift"), COLORS[0])],
+        "Aerodynamic forces",
+        "N",
+    )
+    panel(6, [("Mach", rec.col("mach"), COLORS[3])], "Mach number", "-")
+    panel(
+        7,
+        [
+            ("AoA", np.degrees(rec.col("aoa")), COLORS[4]),
+            ("static margin", rec.col("static_margin"), COLORS[5]),
+        ],
+        "Angle of attack [deg] / static margin [cal]",
+        "",
+    )
+    ax = a[8]
+    ax.plot(rec.col("pos_x"), rec.col("pos_z"), color=COLORS[0], lw=1.2, label="x-z (E-up)")
+    ax.plot(rec.col("pos_y"), rec.col("pos_z"), color=COLORS[1], lw=1.2, label="y-z (N-up)")
+    ax.set_title("Flight path", fontsize=10)
+    ax.set_xlabel("horizontal displacement [m]")
+    ax.set_ylabel("height [m]")
+    ax.grid(alpha=0.3)
+    ax.legend(fontsize=7, frameon=False)
+    fig.suptitle(
+        f"{rec.meta.simulation_id}  (fidelity {rec.meta.fidelity}, dt {rec.meta.dt:g} s)", fontsize=11
+    )
+    return fig

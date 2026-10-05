@@ -4,21 +4,44 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rocket-simulator"
-version = "0.1.0"
-description = "Simulation environment for an autonomous rocket guidance, navigation, and control system"
+version = "0.2.0"
+description = "Physics-based rocket flight simulator and dataset generator for autonomous-rocket GNC development"
+readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "numpy",
-    "scipy",
-    "matplotlib",
-    "pandas",
-    "jupyter",
-    "rocketpy",
-    "Ruff",
-    "Black",
-    "Pytest",
-    "PySide6",
+    "numpy>=1.26",
+    "pyyaml>=6",
+    "pyarrow>=14",
+    "matplotlib>=3.8",
+    "scipy>=1.11",
 ]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.6"]
+dev = ["pytest>=8", "ruff", "mypy", "psutil"]
+
+[project.scripts]
+rocketsim = "rocket_sim.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = ["slow: long-running tests (deselect with -m 'not slow')"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501", "RUF012", "RUF002", "RUF003", "SIM108", "B905", "E741", "B023", "RUF059", "RUF046", "RUF007", "RUF005"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true
+check_untyped_defs = true

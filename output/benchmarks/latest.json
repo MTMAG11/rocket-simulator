@@ -1,0 +1,66 @@
+{
+  "machine": {
+    "platform": "Windows-10-10.0.26300-SP0",
+    "python": "3.11.9",
+    "cpu_count": 12
+  },
+  "single: L3 6-DOF, dt=0.01": {
+    "wall_s": 0.6013186000054702,
+    "steps": 5353,
+    "steps_per_s": 8902.102811972394,
+    "peak_alloc_mb": 7.506724
+  },
+  "single: L3 6-DOF, dt=0.001 (ref)": {
+    "wall_s": 2.079092200001469,
+    "steps": 16376,
+    "steps_per_s": 7876.51456726567,
+    "peak_alloc_mb": 16.570945
+  },
+  "single: L2 3-DOF, dt=0.01": {
+    "wall_s": 0.30454420001478866,
+    "steps": 3253,
+    "steps_per_s": 10681.53653834824,
+    "peak_alloc_mb": 3.488446
+  },
+  "single: L2 FAST, dt=0.02": {
+    "wall_s": 0.199666000000434,
+    "steps": 2683,
+    "steps_per_s": 13437.440525648673,
+    "peak_alloc_mb": 3.200476
+  },
+  "batch 100 L3 6-DOF": {
+    "wall_s": 23.954298900003778,
+    "sims_per_s": 4.174616022679095
+  },
+  "batch 100 L2 FAST": {
+    "wall_s": 7.600983600015752,
+    "sims_per_s": 13.156192048591285
+  },
+  "batch 1000 L3 6-DOF": {
+    "wall_s": 128.99312289999216,
+    "sims_per_s": 7.752351268953276
+  },
+  "batch 1000 L2 FAST": {
+    "wall_s": 50.63069039999391,
+    "sims_per_s": 19.75086636385508
+  },
+  "dataset windowed": {
+    "wall_s": 40.91098309998051,
+    "sims_per_s": 24.443313854280767,
+    "bytes": 49814029
+  },
+  "text": [
+    "machine: Windows-10-10.0.26300-SP0, 12 logical cores, python 3.11.9",
+    "",
+    "single: L3 6-DOF, dt=0.01               601 ms    5353 steps       8902 steps/s  peak alloc   7.5 MB",
+    "single: L3 6-DOF, dt=0.001 (ref)       2079 ms   16376 steps       7877 steps/s  peak alloc  16.6 MB",
+    "single: L2 3-DOF, dt=0.01               305 ms    3253 steps      10682 steps/s  peak alloc   3.5 MB",
+    "single: L2 FAST, dt=0.02                200 ms    2683 steps      13437 steps/s  peak alloc   3.2 MB",
+    "batch   100 sims, L3 6-DOF  workers=auto     24.0 s      4.2 sims/s",
+    "batch   100 sims, L2 FAST   workers=auto      7.6 s     13.2 sims/s",
+    "batch  1000 sims, L3 6-DOF  workers=auto    129.0 s      7.8 sims/s",
+    "batch  1000 sims, L2 FAST   workers=auto     50.6 s     19.8 sims/s",
+    "dataset (windowed, L2 FAST)  1000 sims     40.9 s     24.4 sims/s  49.8 MB on disk",
+    "\nprocess RSS at end: 93 MB"
+  ]
+}

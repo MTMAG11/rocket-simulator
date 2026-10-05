@@ -1,0 +1,56 @@
+# Windowed time-series dataset for a state-estimation / prediction network.
+# Run:  rocketsim generate-dataset configs/dataset_example.yaml --runs 60
+#
+# Inputs are MEASURED quantities (accelerometer, gyro, barometer) + a clock feature; the label is the TRUE
+# vertical velocity 0.5 s after the end of each 50-sample window. Inputs contain no truth, so a model trained on this
+# set uses only what a flight computer would have.
+name: est-demo
+base_config: example_g80.yaml
+master_seed: 20241004
+shard_runs: 10
+workers: 0
+overrides:
+  fidelity: 4                      # sensors on
+  motor: {ignition_delay_s: 1.0}   # pad time before ignition
+  sensors: {accelerometer: {saturation: 400.0}}
+  simulation: {dt_s: 0.01, descent_dt_s: 0.05, stop_after_apogee_s: 3.0}   # ascent-focused: no long parachute descent
+parameters:
+  - {path: rocket.dry_mass_kg,                 dist: normal,     rel_std: 0.03}
+  - {path: rocket.aero.drag_scale,             dist: lognormal,  median: 1.0, sigma: 0.08}
+  - {path: motor.thrust_scale,                 dist: truncnormal, mean: 1.0, std: 0.03, low: 0.9, high: 1.1}
+  - {path: launch.elevation_deg,               dist: uniform,    low: 84, high: 90}
+  - {path: environment.wind.model,             dist: choice,     values: [constant]}
+  - {path: environment.wind.speed_ms,          dist: uniform,    low: 0, high: 6}
+  - {path: environment.wind.direction_from_deg, dist: uniform,   low: 0, high: 360}
+  - {path: environment.atmosphere.temperature_offset_k, dist: normal, mean: 0, std: 8}
+  - {path: sensors.accelerometer.noise_std,    dist: lognormal,  median: 0.03, sigma: 0.3}
+  - {path: sensors.gyroscope.bias_std,         dist: lognormal,  median: 0.002, sigma: 0.3}
+splits:
+  train: {runs: 80}
+  val:   {runs: 10}
+  # hold-out distribution: stronger wind and heavier vehicles than anything seen in training
+  test:
+    runs: 10
+    parameters:
+      - {path: rocket.dry_mass_kg,        dist: uniform, low: 0.50, high: 0.56}
+      - {path: environment.wind.model,    dist: choice,  values: [constant]}
+      - {path: environment.wind.speed_ms, dist: uniform, low: 6, high: 10}
+      - {path: launch.elevation_deg,      dist: uniform, low: 80, high: 84}
+dataset:
+  kind: windowed
+  sample_dt_s: 0.02
+  trim: flight
+  inputs:
+    - {column: meas_accel_x}
+    - {column: meas_accel_y}
+    - {column: meas_accel_z}
+    - {column: meas_gyro_x}
+    - {column: meas_gyro_y}
+    - {column: meas_gyro_z}
+    - {column: meas_baro_altitude}
+    - {derived: time_since_ignition}
+  targets:
+    - {column: vel_z}
+  window: {history: 50, stride: 5, target: future, horizon_s: 0.5}
+quality: {max_speed_ms: 1500, min_apogee_m: 50, require_landing: false, allowed_status: [ok, truncated]}
+output_dir: output/est-demo

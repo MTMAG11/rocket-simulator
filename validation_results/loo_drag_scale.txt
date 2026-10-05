@@ -1,0 +1,7 @@
+Leave-one-out calibration of rocket.aero.drag_scale in [0.7, 1.5]
+  justification: component-buildup drag is a prior with ~+-25% uncertainty (docs/physics.md)
+  held out bella_lui              fitted on ndrt_2020, prometheus: value 1.133  apogee error nominal  +0.50 %  calibrated  -0.75 %
+  held out ndrt_2020              fitted on bella_lui, prometheus: value 0.879  apogee error nominal +13.43 %  calibrated +17.67 %
+  held out prometheus             fitted on bella_lui, ndrt_2020: value 1.430  apogee error nominal  -4.90 %  calibrated -17.08 %
+  RMS apogee error on held-out flights: nominal 8.26 %  calibrated 14.19 %
+  verdict: NOT supported: held-out flights do not improve materially; parameter left at nominal

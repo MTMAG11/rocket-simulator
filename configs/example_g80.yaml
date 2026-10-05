@@ -1,0 +1,23 @@
+# Generic 29 mm mid-power rocket on an AeroTech G80T. Geometry/masses are illustrative
+# (NOT a measured vehicle); replace with your own airframe data.
+config_version: 1
+name: example_g80
+fidelity: 3
+simulation: {dt_s: 0.01, descent_dt_s: 0.05, t_max_s: 300, integrator: rk4}
+rocket:
+  name: generic-29mm
+  body_diameter_m: 0.041
+  body_length_m: 1.00
+  nose: {shape: ogive, length_m: 0.17}
+  fins: {count: 4, root_chord_m: 0.10, tip_chord_m: 0.045, span_m: 0.07, sweep_m: 0.06, thickness_m: 0.002, position_from_nose_m: 0.82}
+  dry_mass_kg: 0.45          # airframe incl. recovery, WITHOUT motor
+  cg_from_nose_m: 0.60       # dry CG (no motor)
+  parachutes:
+    - {cd: 1.5, diameter_m: 0.60, trigger: apogee, delay_s: 0.0}
+motor:
+  file: data/motors/AeroTech_G80T.eng
+environment:
+  atmosphere: {model: isa}
+  gravity: {model: inverse_square}
+  wind: {model: constant, speed_ms: 3.0, direction_from_deg: 270}
+launch: {elevation_deg: 90, azimuth_deg: 0, rail_length_m: 1.5}

@@ -1,0 +1,18 @@
+
+launch elevation 90 deg
+                          this sim    RocketPy   diff %
+apogee                     3768.81     3775.17    -0.17
+t_apogee                     27.30       27.34    -0.18
+vmax                        319.09      319.18    -0.03
+rail_exit_v                  27.06       27.15    -0.32
+horizontal @apogee             0.0         7.6
+static margin: this sim CP 1.635 m from nose; RocketPy 1.00 cal
+
+launch elevation 80 deg
+                          this sim    RocketPy   diff %
+apogee                     3613.58     3620.09    -0.18
+t_apogee                     26.69       26.77    -0.29
+vmax                        319.85      319.95    -0.03
+rail_exit_v                  27.09       27.16    -0.26
+horizontal @apogee          1299.6      1307.1
+static margin: this sim CP 1.635 m from nose; RocketPy 1.00 cal

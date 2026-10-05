@@ -1,0 +1,18 @@
+Validation: ndrt_2020
+  source: Notre Dame Rocket Team via RocketPy example data  (quality: university team; altimeter altitude (ft AGL, ~20 Hz) and axial accelerometer (400 Hz); parameters from a secondary source (RocketPy docs); permission to use given by the team (B. Mumma, 2020). Team-reported apogee 4320 ft.)
+  simulation fidelity 3, dt 0.005 s, time shift applied +0.257 s
+
+  Apogee (AGL)                 real   1320.36  sim   1497.72 m      error  +177.36 (+13.43 %)
+  Apogee time                  real     16.10  sim     16.95 s      error    +0.85 ( +5.25 %)
+  Max velocity                 real    161.77  sim    182.98 m/s    error   +21.21 (+13.11 %)
+  Max axial accel              real     68.53  sim     75.17 m/s^2  error    +6.64 ( +9.68 %)
+  Burnout (accel zero-cross)   real      3.36  sim      3.30 s      error    -0.06 ( -1.87 %)
+  Landing time                 real     83.07  sim     96.98 s      error   +13.91 (+16.74 %)
+  altitude (all)       n= 1819  RMSE  130.833  MAE  117.306  max|e|  218.876  bias +117.293  NRMSE  9.89 %
+  altitude (ascent)    n=  342  RMSE  116.452  MAE  102.294  max|e|  173.857  bias +102.227  NRMSE  8.82 %
+  altitude (descent)   n= 1477  RMSE  133.943  MAE  120.782  max|e|  218.876  bias +120.782  NRMSE 10.13 %
+  velocity             n=  342  RMSE   14.330  MAE   11.297  max|e|   44.740  bias  +10.224  NRMSE  8.68 %
+  axial accel          n= 1819  RMSE    7.826  MAE    5.555  max|e|   27.260  bias   +4.117  NRMSE 10.27 %
+  note: simulated altitude compared as: barometric
+  note: real velocity derived from altitude (0.6 s local quadratic fit); not independent data
+  note: axial-accel time base aligned independently (first >2 g sample); differs from the altimeter alignment by -0.159 s

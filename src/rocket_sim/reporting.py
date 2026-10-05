@@ -1,0 +1,64 @@
+"""Human-readable flight summaries with uncertainty-aware number formatting."""
+
+from __future__ import annotations
+
+from .simulation.record import FlightRecord
+from .uncertainty import format_value, provisional_note
+
+# (label, summary key, unit)
+SUMMARY_ROWS: list[tuple[str, str, str]] = [
+    ("Apogee (AGL)", "apogee_m", "m"),
+    ("Apogee time", "apogee_time_s", "s"),
+    ("Max velocity", "max_velocity_ms", "m/s"),
+    ("Max Mach", "max_mach", ""),
+    ("Max acceleration", "max_acceleration_ms2", "m/s^2"),
+    ("Max load factor", "max_load_factor_g", "g"),
+    ("Burnout time", "burnout_time_s", "s"),
+    ("Burnout altitude", "burnout_altitude_m", "m"),
+    ("Burnout velocity", "burnout_velocity_ms", "m/s"),
+    ("Rail-exit velocity", "rail_exit_velocity_ms", "m/s"),
+    ("Impact speed", "impact_speed_ms", "m/s"),
+    ("Impact vertical speed", "impact_vertical_speed_ms", "m/s"),
+    ("Landing distance from pad", "landing_distance_m", "m"),
+    ("Total flight time", "flight_time_s", "s"),
+]
+
+
+def summary_rows(rec: FlightRecord) -> list[tuple[str, str]]:
+    s = rec.summary
+    fid = rec.meta.fidelity
+    rows = []
+    for label, key, unit in SUMMARY_ROWS:
+        v = s.get(key)
+        rows.append((label, format_value(float(v), key, unit, fid) if v is not None else "n/a"))
+    sm = s.get("static_margin_launch_cal")
+    if sm is not None:
+        rows.append(("Static margin at launch", f"{sm:.1f} cal"))
+    rows.append(("Liftoff thrust/weight", f"{s.get('liftoff_thrust_to_weight', 0.0):.1f}"))
+    return rows
+
+
+def summary_text(rec: FlightRecord) -> str:
+    m = rec.meta
+    lines = [
+        f"simulation {m.simulation_id}  seed={m.seed}  fidelity={m.fidelity}"
+        f"{' (fast)' if m.fast else ''}  dt={m.dt:g}s  integrator={m.integrator}  status={m.status}",
+        f"simulator {m.sim_version}  physics {m.physics_version}  schema {m.schema_version}  "
+        f"({m.n_steps} steps, {m.wall_time_s:.2f} s wall)",
+        "",
+    ]
+    width = max(len(a) for a, _ in summary_rows(rec))
+    for label, val in summary_rows(rec):
+        lines.append(f"  {label:<{width}}  {val}")
+    if rec.meta.fidelity >= 2:
+        lines.append("")
+        lines.append("  " + provisional_note())
+        lines.append(
+            "  uncertainties are extrapolated from 3 validated 20 kg-class flights (docs/validation.md); "
+            "this vehicle itself is not validated"
+        )
+    for w in m.warnings:
+        lines.append(f"  WARNING: {w}")
+    for n in m.notes:
+        lines.append(f"  note: {n}")
+    return "\n".join(lines)

@@ -1,0 +1,30 @@
+# "Prometheus", Spaceport America, 24 Jun 2022 flight (Cesaroni M1520), inputs from the team
+# parameters in the RocketPy example notebook (prometheus_2022_flight_sim.ipynb).
+# Atmosphere: sea-level pressure derived from the MEASURED pad pressure (86444 Pa at 1401 m
+# MSL) so ISA (with the +15 K offset) reproduces it; temperature offset +15 K is a climatological estimate for a summer
+# morning at 1400 m (not measured; board temperature in the log is sun-heated). Wind unknown
+# (zero assumed). Fin thickness (3 mm) assumed; Von Karman nose approximated as a tangent ogive.
+config_version: 1
+name: prometheus_sim
+fidelity: 3
+simulation: {dt_s: 0.005, descent_dt_s: 0.05, t_max_s: 500}
+rocket:
+  name: Prometheus
+  body_diameter_m: 0.1397
+  body_length_m: 2.229
+  nose: {shape: ogive, length_m: 0.742}
+  fins: {count: 3, root_chord_m: 0.268, tip_chord_m: 0.136, span_m: 0.130, sweep_m: 0.066, thickness_m: 0.003, position_from_nose_m: 1.956}
+  dry_mass_kg: 13.93           # airframe without motor (motor hardware 2.981 kg counted by the motor model)
+  cg_from_nose_m: 1.2741       # 2.229 - 0.9549
+  inertia: {ixx_kgm2: 0.05, iyy_kgm2: 4.87}
+  motor_aft_from_nose_m: 2.229
+  parachutes:
+    - {cd: 1.6, diameter_m: 0.6096, trigger: apogee, delay_s: 0.0}
+    - {cd: 2.2, diameter_m: 1.8288, trigger: altitude, altitude_m: 457.2, delay_s: 0.0}
+motor: {file: raw/Cesaroni_7579M1520-P.eng}
+environment:
+  atmosphere: {model: isa, temperature_offset_k: 15.0, sea_level_pressure_pa: 101470.2}
+  gravity: {model: inverse_square}
+  wind: {model: none}
+  site_elevation_msl_m: 1401.0
+launch: {elevation_deg: 80.0, azimuth_deg: 75.0, rail_length_m: 5.18}

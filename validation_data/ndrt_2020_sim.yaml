@@ -1,0 +1,30 @@
+# Notre Dame Rocket Team 2020 (Three Oaks, MI, 23 Feb 2020), Cesaroni L1395. Inputs from the
+# team parameters in the RocketPy example notebook (ndrt_2020_flight_sim.ipynb).
+# KNOWN GAPS: the real airframe steps from 203 mm to 155 mm diameter at ~1.2 m (a transition);
+# this model has ONE body diameter (203 mm), so wetted/frontal/base-area drag is overestimated.
+# Published inertias (Iyy 73 kg m^2) are implausible; thin-tube estimate used. Fin thickness
+# (3 mm) assumed. Atmosphere: ISA + climatological offset; wind unknown (3 m/s assumed; only
+# drift depends on it).
+config_version: 1
+name: ndrt_2020_sim
+fidelity: 3
+simulation: {dt_s: 0.005, descent_dt_s: 0.05, t_max_s: 500}
+rocket:
+  name: NDRT 2020
+  body_diameter_m: 0.203
+  body_length_m: 3.391
+  nose: {shape: ogive, length_m: 0.610}
+  fins: {count: 3, root_chord_m: 0.152, tip_chord_m: 0.0762, span_m: 0.165, sweep_m: 0.0381, thickness_m: 0.003, position_from_nose_m: 3.050}
+  dry_mass_kg: 18.998          # airframe without motor (RocketPy: dry mass 20.846 incl. 1.848 motor hardware)
+  cg_from_nose_m: 1.30
+  motor_aft_from_nose_m: 3.391
+  parachutes:
+    - {cd: 1.5, diameter_m: 0.6096, trigger: apogee, delay_s: 1.0}
+    - {cd: 2.2, diameter_m: 3.048, trigger: altitude, altitude_m: 167.64, delay_s: 1.0}
+motor: {file: raw/Cesaroni_4895L1395-P.eng}
+environment:
+  atmosphere: {model: isa, temperature_offset_k: -12.0}
+  gravity: {model: inverse_square}
+  wind: {model: constant, speed_ms: 3.0, direction_from_deg: 270.0}
+  site_elevation_msl_m: 206.0
+launch: {elevation_deg: 90.0, azimuth_deg: 181.0, rail_length_m: 3.353}

@@ -1,1050 +1,572 @@
-from pathlib import Path
+"""Graphical front end (PySide6 + Matplotlib).
 
-from PySide6 import QtWidgets
+The GUI is a thin client of the simulation engine: it builds a config dict, runs the simulation
+in a background thread, and visualises the resulting FlightRecord. Large dataset generation is
+headless-only (``rocketsim batch``); the dataset browser here reads metadata and reproduces single
+runs on demand, so it never loads every timestep.
+"""
+
+from __future__ import annotations
+
+import copy
+import sys
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
+from matplotlib.figure import Figure
+from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import Qt
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
+from ..config import apply_overrides, config_from_dict, config_to_dict, load_config
+from ..config.loader import PROJECT_ROOT
+from ..data.export import export_record
+from ..data.schema import column, columns_for
+from ..errors import RocketSimError
+from ..motor import available_motors
+from ..plotting import COLORS, EVENT_STYLE
+from ..reporting import summary_text
+from ..simulation import FlightPhase, Simulation
+from ..simulation.record import FlightRecord
+from .styles import MAIN_STYLE
 
-from ..config import SimulationConfig
-from ..motor import get_available_motors
-from ..simulation import run_simulation as run_simulation_backend
-
-
-MAIN_STYLE = """
-QMainWindow {
-    background-color: #1e1e1e;
+DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "example_g80.yaml"
+DEFAULT_PLOTS = ["altitude", "speed", "thrust"]
+PHASE_COLORS = {
+    0: "#999999",
+    1: "#E69F00",
+    2: "#D55E00",
+    3: "#CC79A7",
+    4: "#0072B2",
+    5: "#009E73",
+    6: "#56B4E9",
+    7: "#000000",
 }
 
-QWidget {
-    color: #e0e0e0;
-    font-size: 13px;
-}
 
-QGroupBox {
-    border: 1px solid #444444;
-    border-radius: 6px;
-    margin-top: 10px;
-    padding-top: 10px;
-    font-weight: bold;
-}
+class SimWorker(QtCore.QObject):
+    finished = QtCore.Signal(object)
+    failed = QtCore.Signal(str)
 
-QGroupBox::title {
-    subcontrol-origin: margin;
-    left: 10px;
-    padding: 0 5px;
-}
+    def __init__(self, cfg_dict: dict[str, Any], base_dir: Path, seed: int) -> None:
+        super().__init__()
+        self.cfg_dict, self.base_dir, self.seed = cfg_dict, base_dir, seed
 
-QPushButton {
-    background-color: #333333;
-    border: 1px solid #555555;
-    border-radius: 5px;
-    padding: 7px 14px;
-}
-
-QPushButton:hover {
-    background-color: #444444;
-}
-
-QPushButton:pressed {
-    background-color: #222222;
-}
-
-QComboBox,
-QDoubleSpinBox,
-QSpinBox {
-    background-color: #2b2b2b;
-    border: 1px solid #555555;
-    border-radius: 4px;
-    padding: 5px;
-}
-
-QSlider::groove:horizontal {
-    height: 5px;
-    background: #444444;
-    border-radius: 2px;
-}
-
-QSlider::handle:horizontal {
-    width: 12px;
-    margin: -4px 0;
-    border-radius: 6px;
-    background: #aaaaaa;
-}
-
-QTabWidget::pane {
-    border: 1px solid #444444;
-}
-
-QTabBar::tab {
-    background: #2b2b2b;
-    padding: 8px 14px;
-    border: 1px solid #444444;
-}
-
-QTabBar::tab:selected {
-    background: #3a3a3a;
-}
-
-QLabel {
-    color: #dddddd;
-}
-"""
+    @QtCore.Slot()
+    def run(self) -> None:
+        try:
+            cfg = config_from_dict(self.cfg_dict, base_dir=self.base_dir)
+            self.finished.emit(Simulation(cfg, seed=self.seed).run())
+        except RocketSimError as exc:
+            self.failed.emit(f"{type(exc).__name__}: {exc}")
+        except Exception as exc:
+            self.failed.emit(f"unexpected {type(exc).__name__}: {exc}")
 
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
-
         self.setWindowTitle("Rocket Simulator")
-        self.resize(1400, 900)
+        self.resize(1500, 920)
+        self.record: FlightRecord | None = None
+        self.base_path = DEFAULT_CONFIG
+        self.base_dict: dict[str, Any] = config_to_dict(load_config(DEFAULT_CONFIG))
+        self.base_dir = DEFAULT_CONFIG.parent
+        self._thread: QtCore.QThread | None = None
+        self._worker: SimWorker | None = None
+        self._build_ui()
+        self._load_controls_from_dict()
 
-        self.results = None
-        self.current_graph = "Altitude"
+    # ---------------------------------------------------------------------------- UI building
+    def _build_ui(self) -> None:
+        central = QtWidgets.QWidget()
+        self.setCentralWidget(central)
+        root = QtWidgets.QHBoxLayout(central)
 
-        self.setup_ui()
-        self.connect_signals()
-        self.reset_simulation()
+        # ---- left: controls
+        left = QtWidgets.QWidget()
+        left.setMaximumWidth(340)
+        lv = QtWidgets.QVBoxLayout(left)
 
-    def setup_ui(self):
-        central_widget = QtWidgets.QWidget()
-        self.setCentralWidget(central_widget)
+        btns = QtWidgets.QHBoxLayout()
+        self.run_button = QtWidgets.QPushButton("Run simulation")
+        self.run_button.clicked.connect(self.run_simulation)
+        self.open_button = QtWidgets.QPushButton("Open config…")
+        self.open_button.clicked.connect(self.open_config)
+        btns.addWidget(self.run_button)
+        btns.addWidget(self.open_button)
+        lv.addLayout(btns)
+        self.config_label = QtWidgets.QLabel()
+        self.config_label.setWordWrap(True)
+        lv.addWidget(self.config_label)
 
-        main_layout = QtWidgets.QVBoxLayout(central_widget)
+        g = QtWidgets.QGroupBox("Vehicle and motor")
+        f = QtWidgets.QFormLayout(g)
+        self.motor_box = QtWidgets.QComboBox()
+        for p in available_motors(PROJECT_ROOT / "data" / "motors"):
+            self.motor_box.addItem(p.stem, str(p.relative_to(PROJECT_ROOT)).replace("\\", "/"))
+        self.dry_mass = self._spin(0.001, 500.0, 3, " kg", 0.01)
+        self.thrust_scale = self._spin(0.5, 1.5, 3, "", 0.01)
+        f.addRow("Motor:", self.motor_box)
+        f.addRow("Dry mass:", self.dry_mass)
+        f.addRow("Thrust scale:", self.thrust_scale)
+        lv.addWidget(g)
 
-        # ============================================================
-        # ACTION BAR
-        # ============================================================
+        g = QtWidgets.QGroupBox("Launch and environment")
+        f = QtWidgets.QFormLayout(g)
+        self.elevation = self._spin(5.0, 90.0, 1, " deg", 1.0)
+        self.azimuth = self._spin(0.0, 360.0, 1, " deg", 5.0)
+        self.wind_speed = self._spin(0.0, 40.0, 1, " m/s", 0.5)
+        self.wind_dir = self._spin(0.0, 360.0, 0, " deg (from)", 10.0)
+        self.temp_offset = self._spin(-40.0, 40.0, 1, " K", 1.0)
+        self.site_elev = self._spin(-400.0, 5000.0, 0, " m", 50.0)
+        f.addRow("Elevation:", self.elevation)
+        f.addRow("Azimuth:", self.azimuth)
+        f.addRow("Wind speed:", self.wind_speed)
+        f.addRow("Wind from:", self.wind_dir)
+        f.addRow("Temp. offset (ISA):", self.temp_offset)
+        f.addRow("Site elevation MSL:", self.site_elev)
+        lv.addWidget(g)
 
-        action_layout = QtWidgets.QHBoxLayout()
+        g = QtWidgets.QGroupBox("Simulation")
+        f = QtWidgets.QFormLayout(g)
+        self.fidelity = QtWidgets.QComboBox()
+        for i, name in (
+            (0, "0  1-D vacuum"),
+            (1, "1  3-DOF vacuum"),
+            (2, "2  3-DOF + aero"),
+            (3, "3  6-DOF"),
+            (4, "4  6-DOF + sensors"),
+            (5, "5  + estimator/controller"),
+            (6, "6  high-fidelity"),
+        ):
+            self.fidelity.addItem(name, i)
+        self.dt = self._spin(0.0005, 0.1, 4, " s", 0.001)
+        self.integrator = QtWidgets.QComboBox()
+        self.integrator.addItems(["rk4", "midpoint", "euler"])
+        self.seed = QtWidgets.QSpinBox()
+        self.seed.setRange(0, 2**30)
+        f.addRow("Fidelity:", self.fidelity)
+        f.addRow("Timestep:", self.dt)
+        f.addRow("Integrator:", self.integrator)
+        f.addRow("Seed:", self.seed)
+        lv.addWidget(g)
+        self.export_button = QtWidgets.QPushButton("Export telemetry…")
+        self.export_button.clicked.connect(self.export_record)
+        self.export_button.setEnabled(False)
+        lv.addWidget(self.export_button)
+        lv.addStretch()
+        root.addWidget(left)
 
-        self.run_button = QtWidgets.QPushButton("Run Simulation")
-        self.reset_button = QtWidgets.QPushButton("Reset")
+        # ---- right: tabs
+        right = QtWidgets.QVBoxLayout()
+        self.tabs = QtWidgets.QTabWidget()
+        self.tabs.addTab(self._build_graph_tab(), "Graphs")
+        self.tabs.addTab(self._build_3d_tab(), "3D view")
+        self.summary_text = QtWidgets.QPlainTextEdit()
+        self.summary_text.setReadOnly(True)
+        self.summary_text.setStyleSheet("font-family: Consolas, monospace;")
+        self.tabs.addTab(self.summary_text, "Summary")
+        self.tabs.addTab(self._build_browser_tab(), "Data browser")
+        right.addWidget(self.tabs, 1)
 
-        action_layout.addWidget(self.run_button)
-        action_layout.addWidget(self.reset_button)
-        action_layout.addStretch()
+        tl = QtWidgets.QHBoxLayout()
+        tl.addWidget(QtWidgets.QLabel("Time:"))
+        self.slider = QtWidgets.QSlider(Qt.Orientation.Horizontal)
+        self.slider.valueChanged.connect(self._on_scrub)
+        tl.addWidget(self.slider, 1)
+        self.time_label = QtWidgets.QLabel("-")
+        self.time_label.setMinimumWidth(160)
+        tl.addWidget(self.time_label)
+        right.addLayout(tl)
+        self.readout = QtWidgets.QLabel("Run a simulation to begin.")
+        self.readout.setWordWrap(True)
+        right.addWidget(self.readout)
+        self.events_label = QtWidgets.QLabel()
+        self.events_label.setWordWrap(True)
+        right.addWidget(self.events_label)
+        root.addLayout(right, 1)
+        self.statusBar().showMessage("Ready")
 
-        main_layout.addLayout(action_layout)
+    def _spin(self, lo: float, hi: float, dec: int, suffix: str, step: float) -> QtWidgets.QDoubleSpinBox:
+        s = QtWidgets.QDoubleSpinBox()
+        s.setRange(lo, hi)
+        s.setDecimals(dec)
+        s.setSuffix(suffix)
+        s.setSingleStep(step)
+        return s
 
-        # ============================================================
-        # MAIN CONTENT
-        # ============================================================
-
-        content_layout = QtWidgets.QHBoxLayout()
-
-        # ------------------------------------------------------------
-        # LEFT SIDE: CONTROLS
-        # ------------------------------------------------------------
-
-        controls_widget = QtWidgets.QWidget()
-        controls_layout = QtWidgets.QVBoxLayout(controls_widget)
-
-        controls_widget.setMaximumWidth(330)
-
-        # Rocket
-        rocket_group = QtWidgets.QGroupBox("Rocket")
-        rocket_layout = QtWidgets.QFormLayout(rocket_group)
-
-        self.motor_dropdown = QtWidgets.QComboBox()
-
-        motors = get_available_motors()
-
-        for motor in motors:
-            self.motor_dropdown.addItem(
-                motor.stem,
-                motor,
-            )
-
-        self.dry_mass_spinbox = QtWidgets.QDoubleSpinBox()
-        self.dry_mass_spinbox.setRange(1.0, 100000.0)
-        self.dry_mass_spinbox.setDecimals(2)
-        self.dry_mass_spinbox.setSuffix(" g")
-        self.dry_mass_spinbox.setValue(150.0)
-
-        rocket_layout.addRow(
-            "Motor:",
-            self.motor_dropdown,
-        )
-
-        rocket_layout.addRow(
-            "Dry mass:",
-            self.dry_mass_spinbox,
-        )
-
-        controls_layout.addWidget(rocket_group)
-
-        # Environment
-        environment_group = QtWidgets.QGroupBox("Environment")
-        environment_layout = QtWidgets.QFormLayout(
-            environment_group
-        )
-
-        self.gravity_spinbox = QtWidgets.QDoubleSpinBox()
-        self.gravity_spinbox.setRange(0.0, 30.0)
-        self.gravity_spinbox.setDecimals(3)
-        self.gravity_spinbox.setSuffix(" m/s²")
-        self.gravity_spinbox.setValue(9.81)
-
-        environment_layout.addRow(
-            "Gravity:",
-            self.gravity_spinbox,
-        )
-
-        controls_layout.addWidget(environment_group)
-
-        # Simulation
-        simulation_group = QtWidgets.QGroupBox("Simulation")
-        simulation_layout = QtWidgets.QFormLayout(
-            simulation_group
-        )
-
-        self.timestep_spinbox = QtWidgets.QDoubleSpinBox()
-        self.timestep_spinbox.setRange(0.0001, 1.0)
-        self.timestep_spinbox.setDecimals(4)
-        self.timestep_spinbox.setSingleStep(0.001)
-        self.timestep_spinbox.setSuffix(" s")
-        self.timestep_spinbox.setValue(0.005)
-
-        simulation_layout.addRow(
-            "Timestep:",
-            self.timestep_spinbox,
-        )
-
-        controls_layout.addWidget(simulation_group)
-
-        controls_layout.addStretch()
-
-        content_layout.addWidget(controls_widget)
-
-        # ------------------------------------------------------------
-        # RIGHT SIDE: FLIGHT DATA
-        # ------------------------------------------------------------
-
-        flight_widget = QtWidgets.QWidget()
-        flight_layout = QtWidgets.QVBoxLayout(flight_widget)
-
-        self.flight_tabs = QtWidgets.QTabWidget()
-
-        # ============================================================
-        # GRAPHS TAB
-        # ============================================================
-
-        graphs_tab = QtWidgets.QWidget()
-        graphs_layout = QtWidgets.QVBoxLayout(graphs_tab)
-
-        graph_selector_layout = QtWidgets.QHBoxLayout()
-
-        graph_selector_layout.addWidget(
-            QtWidgets.QLabel("Graph:")
-        )
-
-        self.graph_dropdown = QtWidgets.QComboBox()
-
-        self.graph_dropdown.addItems(
-            [
-                "Altitude",
-                "Velocity",
-                "Acceleration",
-                "G-Force",
-                "Thrust",
-                "TWR",
-                "All",
-            ]
-        )
-
-        graph_selector_layout.addWidget(
-            self.graph_dropdown
-        )
-
-        graph_selector_layout.addStretch()
-
-        graphs_layout.addLayout(graph_selector_layout)
-
-        self.figure = Figure()
+    def _build_graph_tab(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        h = QtWidgets.QHBoxLayout(w)
+        self.var_list = QtWidgets.QListWidget()
+        self.var_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
+        self.var_list.setMaximumWidth(250)
+        self.var_list.itemSelectionChanged.connect(self.update_graph)
+        h.addWidget(self.var_list)
+        v = QtWidgets.QVBoxLayout()
+        self.figure = Figure(layout="constrained")
         self.canvas = FigureCanvas(self.figure)
+        v.addWidget(NavigationToolbar2QT(self.canvas, w))  # zoom / pan / home
+        v.addWidget(self.canvas, 1)
+        h.addLayout(v, 1)
+        self.cursor_lines: list[Any] = []
+        return w
 
-        graphs_layout.addWidget(self.canvas)
+    def _build_3d_tab(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        v = QtWidgets.QVBoxLayout(w)
+        self.fig3d = Figure(layout="constrained")
+        self.canvas3d = FigureCanvas(self.fig3d)
+        v.addWidget(NavigationToolbar2QT(self.canvas3d, w))
+        v.addWidget(self.canvas3d, 1)
+        self.ax3d = self.fig3d.add_subplot(111, projection="3d")
+        self._rocket_line = None
+        self._wind_arrow = None
+        return w
 
-        self.flight_tabs.addTab(
-            graphs_tab,
-            "Graphs",
-        )
+    def _build_browser_tab(self) -> QtWidgets.QWidget:
+        w = QtWidgets.QWidget()
+        v = QtWidgets.QVBoxLayout(w)
+        top = QtWidgets.QHBoxLayout()
+        self.ds_button = QtWidgets.QPushButton("Open dataset directory…")
+        self.ds_button.clicked.connect(self.open_dataset)
+        self.ds_label = QtWidgets.QLabel("No dataset open")
+        self.plot_run_button = QtWidgets.QPushButton("Reproduce and plot selected run")
+        self.plot_run_button.clicked.connect(self.plot_selected_run)
+        self.plot_run_button.setEnabled(False)
+        top.addWidget(self.ds_button)
+        top.addWidget(self.ds_label, 1)
+        top.addWidget(self.plot_run_button)
+        v.addLayout(top)
+        split = QtWidgets.QSplitter(Qt.Orientation.Vertical)
+        self.runs_table = QtWidgets.QTableWidget()
+        self.runs_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectionBehavior.SelectRows)
+        self.runs_table.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.runs_table.itemSelectionChanged.connect(self._on_run_selected)
+        self.run_detail = QtWidgets.QPlainTextEdit()
+        self.run_detail.setReadOnly(True)
+        self.run_detail.setStyleSheet("font-family: Consolas, monospace;")
+        split.addWidget(self.runs_table)
+        split.addWidget(self.run_detail)
+        v.addWidget(split, 1)
+        self.dataset_dir: Path | None = None
+        return w
 
-        # ============================================================
-        # 3D TAB
-        # ============================================================
+    # ------------------------------------------------------------------------- config <-> UI
+    def _load_controls_from_dict(self) -> None:
+        d = self.base_dict
+        self.config_label.setText(f"Config: {self.base_path.name}  ({d['name']})")
+        idx = self.motor_box.findData(d["motor"]["file"].replace("\\", "/"))
+        if idx < 0:
+            self.motor_box.addItem(Path(d["motor"]["file"]).stem, d["motor"]["file"])
+            idx = self.motor_box.count() - 1
+        self.motor_box.setCurrentIndex(idx)
+        self.dry_mass.setValue(d["rocket"]["dry_mass_kg"])
+        self.thrust_scale.setValue(d["motor"]["thrust_scale"])
+        self.elevation.setValue(d["launch"]["elevation_deg"])
+        self.azimuth.setValue(d["launch"]["azimuth_deg"])
+        w = d["environment"]["wind"]
+        self.wind_speed.setValue(w["speed_ms"] if w["model"] != "none" else 0.0)
+        self.wind_dir.setValue(w["direction_from_deg"])
+        self.temp_offset.setValue(d["environment"]["atmosphere"]["temperature_offset_k"])
+        self.site_elev.setValue(d["environment"]["site_elevation_msl_m"])
+        self.fidelity.setCurrentIndex(self.fidelity.findData(d["fidelity"]))
+        self.dt.setValue(d["simulation"]["dt_s"])
+        self.integrator.setCurrentText(d["simulation"]["integrator"])
+        self.seed.setValue(d["simulation"]["seed"] or 0)
+        self._populate_vars(d["fidelity"])
 
-        view_3d_tab = QtWidgets.QWidget()
-        view_3d_layout = QtWidgets.QVBoxLayout(view_3d_tab)
+    def _populate_vars(self, fidelity: int) -> None:
+        keep = {i.data(Qt.ItemDataRole.UserRole) for i in self.var_list.selectedItems()} or set(DEFAULT_PLOTS)
+        self.var_list.blockSignals(True)
+        self.var_list.clear()
+        for c in columns_for(fidelity, estimator=fidelity >= 5):
+            if c.name in ("t", "dt", "phase"):
+                continue
+            it = QtWidgets.QListWidgetItem(f"{c.name}  [{c.unit}]")
+            it.setData(Qt.ItemDataRole.UserRole, c.name)
+            it.setToolTip(c.description)
+            self.var_list.addItem(it)
+            if c.name in keep:
+                it.setSelected(True)
+        self.var_list.blockSignals(False)
 
-        view_3d_label = QtWidgets.QLabel(
-            "3D View\n\nComing later"
-        )
-
-        view_3d_label.setAlignment(
-            Qt.AlignCenter
-        )
-
-        view_3d_label.setStyleSheet(
-            "font-size: 20px; color: #888888;"
-        )
-
-        view_3d_layout.addWidget(
-            view_3d_label
-        )
-
-        self.flight_tabs.addTab(
-            view_3d_tab,
-            "3D View",
-        )
-
-        flight_layout.addWidget(
-            self.flight_tabs
-        )
-
-        # ============================================================
-        # SUMMARY
-        # ============================================================
-
-        summary_group = QtWidgets.QGroupBox("Flight Summary")
-        summary_layout = QtWidgets.QGridLayout(
-            summary_group
-        )
-
-        self.max_altitude_label = QtWidgets.QLabel("-")
-        self.max_velocity_label = QtWidgets.QLabel("-")
-        self.max_acceleration_label = QtWidgets.QLabel("-")
-        self.max_g_label = QtWidgets.QLabel("-")
-        self.burnout_label = QtWidgets.QLabel("-")
-        self.apogee_label = QtWidgets.QLabel("-")
-
-        summary_layout.addWidget(
-            QtWidgets.QLabel("Max altitude:"),
-            0,
-            0,
-        )
-        summary_layout.addWidget(
-            self.max_altitude_label,
-            0,
-            1,
-        )
-
-        summary_layout.addWidget(
-            QtWidgets.QLabel("Max velocity:"),
-            0,
-            2,
-        )
-        summary_layout.addWidget(
-            self.max_velocity_label,
-            0,
-            3,
-        )
-
-        summary_layout.addWidget(
-            QtWidgets.QLabel("Max acceleration:"),
-            1,
-            0,
-        )
-        summary_layout.addWidget(
-            self.max_acceleration_label,
-            1,
-            1,
-        )
-
-        summary_layout.addWidget(
-            QtWidgets.QLabel("Max G:"),
-            1,
-            2,
-        )
-        summary_layout.addWidget(
-            self.max_g_label,
-            1,
-            3,
-        )
-
-        summary_layout.addWidget(
-            QtWidgets.QLabel("Burnout:"),
-            2,
-            0,
-        )
-        summary_layout.addWidget(
-            self.burnout_label,
-            2,
-            1,
-        )
-
-        summary_layout.addWidget(
-            QtWidgets.QLabel("Apogee:"),
-            2,
-            2,
-        )
-        summary_layout.addWidget(
-            self.apogee_label,
-            2,
-            3,
-        )
-
-        flight_layout.addWidget(
-            summary_group
-        )
-
-        # ============================================================
-        # TIME CONTROLS
-        # ============================================================
-
-        time_layout = QtWidgets.QHBoxLayout()
-
-        time_layout.addWidget(
-            QtWidgets.QLabel("Time:")
-        )
-
-        self.time_slider = QtWidgets.QSlider(
-            Qt.Horizontal
-        )
-
-        self.time_slider.setMinimum(0)
-        self.time_slider.setMaximum(0)
-
-        time_layout.addWidget(
-            self.time_slider
-        )
-
-        self.time_label = QtWidgets.QLabel(
-            "0.000 s"
-        )
-
-        time_layout.addWidget(
-            self.time_label
-        )
-
-        flight_layout.addLayout(
-            time_layout
-        )
-
-        content_layout.addWidget(
-            flight_widget,
-            stretch=1,
-        )
-
-        main_layout.addLayout(
-            content_layout,
-            stretch=1,
-        )
-
-    # ================================================================
-    # SIGNALS
-    # ================================================================
-
-    def connect_signals(self):
-        self.run_button.clicked.connect(
-            self.run_simulation
-        )
-
-        self.reset_button.clicked.connect(
-            self.reset_simulation
-        )
-
-        self.graph_dropdown.currentTextChanged.connect(
-            self.select_graph
-        )
-
-        self.time_slider.valueChanged.connect(
-            self.update_time_cursor
-        )
-
-    # ================================================================
-    # CONFIG
-    # ================================================================
-
-    def get_simulation_config(self):
-        motor_path = self.motor_dropdown.currentData()
-
-        return SimulationConfig(
-            motor=Path(motor_path),
-            rocket_dry_mass=self.dry_mass_spinbox.value(),
-            gravity=self.gravity_spinbox.value(),
-            dt=self.timestep_spinbox.value(),
-        )
-
-    # ================================================================
-    # GRAPH DATA
-    # ================================================================
-
-    def get_graph_data(self):
-        times = self.results["times"]
-
-        altitudes = self.results["ys"]
-
-        velocities = [
-            (vx**2 + vy**2) ** 0.5
-            for vx, vy in zip(
-                self.results["vxs"],
-                self.results["vys"],
+    def current_dict(self) -> dict[str, Any]:
+        d = copy.deepcopy(self.base_dict)
+        ov: dict[str, Any] = {
+            "motor.file": self.motor_box.currentData(),
+            "rocket.dry_mass_kg": self.dry_mass.value(),
+            "motor.thrust_scale": self.thrust_scale.value(),
+            "launch.elevation_deg": self.elevation.value(),
+            "launch.azimuth_deg": self.azimuth.value(),
+            "environment.atmosphere.temperature_offset_k": self.temp_offset.value(),
+            "environment.site_elevation_msl_m": self.site_elev.value(),
+            "fidelity": int(self.fidelity.currentData()),
+            "simulation.dt_s": self.dt.value(),
+            "simulation.integrator": self.integrator.currentText(),
+        }
+        if self.wind_speed.value() > 0:
+            ov.update(
+                {
+                    "environment.wind.model": "constant",
+                    "environment.wind.speed_ms": self.wind_speed.value(),
+                    "environment.wind.direction_from_deg": self.wind_dir.value(),
+                }
             )
-        ]
+        else:
+            ov["environment.wind.model"] = "none"
+        return apply_overrides(d, ov)
 
-        accelerations = [
-            (ax**2 + ay**2) ** 0.5
-            for ax, ay in zip(
-                self.results["axs"],
-                self.results["ays"],
-            )
-        ]
+    # -------------------------------------------------------------------------------- actions
+    def open_config(self) -> None:
+        p, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Open configuration", str(PROJECT_ROOT / "configs"), "Config (*.yaml *.yml *.json *.toml)"
+        )
+        if not p:
+            return
+        try:
+            cfg = load_config(p)
+        except RocketSimError as exc:
+            QtWidgets.QMessageBox.critical(self, "Invalid configuration", str(exc))
+            return
+        self.base_path, self.base_dir = Path(p), Path(p).parent
+        self.base_dict = config_to_dict(cfg)
+        self._load_controls_from_dict()
 
-        thrusts = self.results["thrusts"]
-        twrs = self.results["twrs"]
+    def run_simulation(self, blocking: bool = False) -> None:
+        if self._thread is not None and self._thread.isRunning():
+            return
+        self.run_button.setEnabled(False)
+        self.statusBar().showMessage("Simulating…")
+        self._worker = SimWorker(self.current_dict(), self.base_dir, self.seed.value())
+        self._worker.finished.connect(self._on_finished)
+        self._worker.failed.connect(self._on_failed)
+        if blocking:
+            self._worker.run()
+            return
+        self._thread = QtCore.QThread()
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.run)
+        self._worker.finished.connect(self._thread.quit)
+        self._worker.failed.connect(self._thread.quit)
+        self._thread.start()
 
-        return (
-            times,
-            altitudes,
-            velocities,
-            accelerations,
-            thrusts,
-            twrs,
+    def _on_failed(self, msg: str) -> None:
+        self.run_button.setEnabled(True)
+        self.statusBar().showMessage("Simulation failed")
+        QtWidgets.QMessageBox.critical(self, "Simulation error", msg)
+
+    def _on_finished(self, rec: FlightRecord) -> None:
+        self.run_button.setEnabled(True)
+        self.set_record(rec)
+        self.statusBar().showMessage(
+            f"Done: {rec.meta.n_steps} steps in {rec.meta.wall_time_s:.2f} s, status {rec.meta.status}"
         )
 
-    # ================================================================
-    # RUN SIMULATION
-    # ================================================================
-
-    def run_simulation(self):
-        config = self.get_simulation_config()
-
-        self.results = run_simulation_backend(
-            config
-        )
-
+    def set_record(self, rec: FlightRecord) -> None:
+        self.record = rec
+        self._populate_vars(rec.meta.fidelity)
+        self.export_button.setEnabled(True)
+        self.summary_text.setPlainText(summary_text(rec))
+        self.slider.blockSignals(True)
+        self.slider.setRange(0, rec.n_rows - 1)
+        self.slider.setValue(0)
+        self.slider.blockSignals(False)
+        ev = [
+            f"{EVENT_STYLE.get(e.name, (e.name,))[0]} {e.t:.2f} s"
+            for e in rec.events
+            if e.name in EVENT_STYLE
+        ]
+        self.events_label.setText("Events: " + "   |   ".join(ev))
         self.update_graph()
-        self.update_summary()
+        self.draw_3d_static()
+        self._on_scrub(0)
 
-        times = self.results["times"]
-
-        if times:
-            self.time_slider.setRange(
-                0,
-                len(times) - 1,
-            )
-
-            self.time_slider.setValue(0)
-
-        self.update_time_cursor(0)
-
-    # ================================================================
-    # GRAPHING
-    # ================================================================
-
-    def update_graph(self):
-        if self.results is None:
+    def export_record(self) -> None:
+        if self.record is None:
             return
+        d = QtWidgets.QFileDialog.getExistingDirectory(self, "Export directory", str(PROJECT_ROOT / "output"))
+        if d:
+            paths = export_record(self.record, d, formats=("csv", "parquet", "json"))
+            self.statusBar().showMessage("Wrote " + ", ".join(p.name for p in paths))
 
-        (
-            times,
-            altitudes,
-            velocities,
-            accelerations,
-            thrusts,
-            twrs,
-        ) = self.get_graph_data()
+    # ---------------------------------------------------------------------------------- graphs
+    def selected_vars(self) -> list[str]:
+        return [i.data(Qt.ItemDataRole.UserRole) for i in self.var_list.selectedItems()]
 
-        if not times:
-            return
-
-        g_forces = [
-            acceleration / 9.80665
-            for acceleration in accelerations
-        ]
-
+    def update_graph(self) -> None:
         self.figure.clear()
+        self.cursor_lines = []
+        rec = self.record
+        if rec is None:
+            self.canvas.draw_idle()
+            return
+        names = [n for n in self.selected_vars() if rec.has(n)] or ["altitude"]
+        axs = self.figure.subplots(len(names), 1, sharex=True)
+        axs = np.atleast_1d(axs)
+        t = rec.col("t")
+        for i, (ax, n) in enumerate(zip(axs, names)):
+            ax.plot(t, rec.col(n), color=COLORS[i % len(COLORS)], lw=1.2)
+            ax.set_ylabel(f"{n}\n[{column(n).unit}]", fontsize=8)
+            ax.grid(alpha=0.3)
+            for e in rec.events:
+                if e.name in EVENT_STYLE:
+                    ax.axvline(e.t, color=EVENT_STYLE[e.name][1], lw=0.8, ls=":")
+            self.cursor_lines.append(ax.axvline(t[0], color="#ffffff", lw=1.0))
+        axs[-1].set_xlabel("time [s]")
+        self.canvas.draw_idle()
 
-        if self.current_graph == "All":
-            axes = self.figure.subplots(
-                3,
-                2,
+    def _on_scrub(self, i: int) -> None:
+        rec = self.record
+        if rec is None:
+            return
+        t = rec.col("t")[i]
+        for ln in self.cursor_lines:
+            ln.set_xdata([t, t])
+        self.canvas.draw_idle()
+        ph = FlightPhase(int(rec.col("phase")[i])).name
+        self.time_label.setText(f"{t:8.3f} s   {ph}")
+        self.readout.setText(
+            f"alt {rec.col('altitude')[i]:.1f} m   speed {rec.col('speed')[i]:.1f} m/s   "
+            f"Mach {rec.col('mach')[i]:.3f}   thrust {rec.col('thrust')[i]:.1f} N   mass {rec.col('mass')[i]:.3f} kg   "
+            f"AoA {np.degrees(rec.col('aoa')[i]):.1f} deg   pitch {np.degrees(rec.col('pitch')[i]):.1f} deg   "
+            f"static margin {rec.col('static_margin')[i]:.2f} cal"
+        )
+        self.update_3d_dynamic(i)
+
+    # ------------------------------------------------------------------------------------ 3-D
+    def draw_3d_static(self) -> None:
+        rec = self.record
+        ax = self.ax3d
+        ax.clear()
+        if rec is None:
+            return
+        x, y, z = rec.col("pos_x"), rec.col("pos_y"), rec.col("pos_z")
+        ph = rec.col("phase").astype(int)
+        for p in np.unique(ph):
+            m = ph == p
+            ax.plot(
+                np.where(m, x, np.nan),
+                np.where(m, y, np.nan),
+                np.where(m, z, np.nan),
+                color=PHASE_COLORS[int(p)],
+                lw=1.6,
+                label=FlightPhase(int(p)).name.title(),
             )
+        span = max(np.ptp(x), np.ptp(y), 1.0)
+        cx, cy = 0.5 * (x.max() + x.min()), 0.5 * (y.max() + y.min())
+        r = 0.6 * max(span, 0.3 * z.max())
+        gx, gy = np.meshgrid([cx - r, cx + r], [cy - r, cy + r])
+        ax.plot_surface(gx, gy, np.zeros_like(gx), alpha=0.15, color="#4a7a4a")
+        ax.set_xlim(cx - r, cx + r)
+        ax.set_ylim(cy - r, cy + r)
+        ax.set_zlim(0, max(z.max(), 1.0) * 1.05)
+        ax.set_xlabel("East [m]")
+        ax.set_ylabel("North [m]")
+        ax.set_zlabel("Up [m]")
+        ax.legend(fontsize=7, loc="upper left")
+        (self._rocket_line,) = ax.plot([], [], [], color="#ffffff", lw=3.0)
+        self._wind_arrow = None
+        self.canvas3d.draw_idle()
 
-            graphs = [
-                (
-                    axes[0, 0],
-                    times,
-                    altitudes,
-                    "Altitude",
-                    "Altitude (m)",
-                ),
-                (
-                    axes[0, 1],
-                    times,
-                    velocities,
-                    "Velocity",
-                    "Velocity (m/s)",
-                ),
-                (
-                    axes[1, 0],
-                    times,
-                    accelerations,
-                    "Acceleration",
-                    "Acceleration (m/s²)",
-                ),
-                (
-                    axes[1, 1],
-                    times,
-                    g_forces,
-                    "G-Force",
-                    "G",
-                ),
-                (
-                    axes[2, 0],
-                    times,
-                    thrusts,
-                    "Thrust",
-                    "Thrust (N)",
-                ),
-                (
-                    axes[2, 1],
-                    times,
-                    twrs,
-                    "TWR",
-                    "TWR",
-                ),
-            ]
+    def update_3d_dynamic(self, i: int) -> None:
+        rec = self.record
+        if rec is None or self._rocket_line is None:
+            return
+        from ..physics.math3d import quat_rotate
 
-            for (
-                axis,
-                x,
-                y,
-                title,
-                ylabel,
-            ) in graphs:
-                axis.plot(
-                    x,
-                    y,
+        q = (rec.col("quat_w")[i], rec.col("quat_x")[i], rec.col("quat_y")[i], rec.col("quat_z")[i])
+        nose = np.array(quat_rotate(q, (1.0, 0.0, 0.0)))
+        p = np.array([rec.col("pos_x")[i], rec.col("pos_y")[i], rec.col("pos_z")[i]])
+        scale = 0.06 * max(self.ax3d.get_zlim()[1], 10.0)
+        tail, head = p - nose * scale, p + nose * scale
+        self._rocket_line.set_data_3d([tail[0], head[0]], [tail[1], head[1]], [tail[2], head[2]])
+        if self._wind_arrow is not None:
+            self._wind_arrow.remove()
+        w = np.array([rec.col("wind_x")[i], rec.col("wind_y")[i], 0.0])
+        if np.linalg.norm(w) > 1e-6:
+            lim = self.ax3d.get_xlim()
+            origin = np.array([lim[0], self.ax3d.get_ylim()[0], 0.0])
+            self._wind_arrow = self.ax3d.quiver(
+                *origin, *(w / np.linalg.norm(w) * scale * 2), color="#56B4E9"
+            )
+        self.canvas3d.draw_idle()
+
+    # ------------------------------------------------------------------------- dataset browser
+    def open_dataset(self, path: str | None = None) -> None:
+        d = path or QtWidgets.QFileDialog.getExistingDirectory(
+            self, "Dataset directory", str(PROJECT_ROOT / "output")
+        )
+        if not d:
+            return
+        try:
+            from ..data.batch import read_manifest, read_runs
+
+            m = read_manifest(d)
+            runs = read_runs(d)
+        except (OSError, RocketSimError, KeyError) as exc:
+            QtWidgets.QMessageBox.critical(self, "Not a dataset", str(exc))
+            return
+        self.dataset_dir = Path(d)
+        c = m["counts"]
+        self.ds_label.setText(
+            f"{m['dataset_id']}: {c['simulations_accepted']}/{c['simulations_requested']} accepted, "
+            f"{c['samples']} samples (fidelity {m['fidelity_level']}, physics {m['versions']['physics']})"
+        )
+        cols = ["simulation_id", "split", "accepted", "res.apogee_m", "res.max_velocity_ms", "reject_reason"]
+        cols = [c_ for c_ in cols if c_ in runs.column_names]
+        rows = runs.select(cols).slice(0, 1000).to_pylist()
+        self.runs_table.setColumnCount(len(cols))
+        self.runs_table.setHorizontalHeaderLabels(cols)
+        self.runs_table.setRowCount(len(rows))
+        for r, row in enumerate(rows):
+            for c_, name in enumerate(cols):
+                v = row[name]
+                self.runs_table.setItem(
+                    r, c_, QtWidgets.QTableWidgetItem(f"{v:.1f}" if isinstance(v, float) else str(v))
                 )
+        self.runs_table.resizeColumnsToContents()
+        self.run_detail.setPlainText(
+            f"{len(rows)} of {runs.num_rows} runs shown (metadata only; no telemetry loaded)."
+        )
 
-                axis.set_title(title)
-                axis.set_xlabel("Time (s)")
-                axis.set_ylabel(ylabel)
-                axis.grid(True)
+    def _selected_run_id(self) -> str | None:
+        r = self.runs_table.currentRow()
+        item = self.runs_table.item(r, 0) if r >= 0 else None
+        return None if item is None else item.text()
 
-        else:
-            axis = self.figure.add_subplot(111)
+    def _on_run_selected(self) -> None:
+        sid = self._selected_run_id()
+        if sid and self.dataset_dir:
+            from ..data.browser import describe_run
 
-            if self.current_graph == "Altitude":
-                values = altitudes
-                ylabel = "Altitude (m)"
+            self.run_detail.setPlainText(describe_run(self.dataset_dir, sid))
+            self.plot_run_button.setEnabled(True)
 
-            elif self.current_graph == "Velocity":
-                values = velocities
-                ylabel = "Velocity (m/s)"
-
-            elif self.current_graph == "Acceleration":
-                values = accelerations
-                ylabel = "Acceleration (m/s²)"
-
-            elif self.current_graph == "G-Force":
-                values = g_forces
-                ylabel = "G"
-
-            elif self.current_graph == "Thrust":
-                values = thrusts
-                ylabel = "Thrust (N)"
-
-            elif self.current_graph == "TWR":
-                values = twrs
-                ylabel = "TWR"
-
-            else:
-                values = []
-                ylabel = ""
-
-            axis.plot(
-                times,
-                values,
-            )
-
-            axis.set_title(
-                self.current_graph
-            )
-
-            axis.set_xlabel(
-                "Time (s)"
-            )
-
-            axis.set_ylabel(
-                ylabel
-            )
-
-            axis.grid(True)
-
-        self.figure.tight_layout()
-        self.canvas.draw()
-
-    # ================================================================
-    # TIME CURSOR
-    # ================================================================
-
-    def update_time_cursor(self, index):
-        if self.results is None:
+    def plot_selected_run(self) -> None:
+        sid = self._selected_run_id()
+        if not sid or not self.dataset_dir:
             return
+        from ..data.browser import reproduce_run
 
-        (
-            times,
-            altitudes,
-            velocities,
-            accelerations,
-            thrusts,
-            twrs,
-        ) = self.get_graph_data()
-
-        if not times:
+        try:
+            rec = reproduce_run(self.dataset_dir, sid)
+        except RocketSimError as exc:
+            QtWidgets.QMessageBox.critical(self, "Cannot reproduce run", str(exc))
             return
-
-        if index < 0:
-            index = 0
-
-        if index >= len(times):
-            index = len(times) - 1
-
-        self.time_label.setText(
-            f"{times[index]:.3f} s"
-        )
-
-        self.update_graph_cursor(index)
-
-    # ================================================================
-    # GRAPH CURSOR
-    # ================================================================
-
-    def update_graph_cursor(self, index):
-        if self.results is None:
-            return
-
-        (
-            times,
-            altitudes,
-            velocities,
-            accelerations,
-            thrusts,
-            twrs,
-        ) = self.get_graph_data()
-
-        if not times:
-            return
-
-        g_forces = [
-            acceleration / 9.80665
-            for acceleration in accelerations
-        ]
-
-        self.figure.clear()
-
-        if self.current_graph == "All":
-            axes = self.figure.subplots(
-                3,
-                2,
-            )
-
-            graphs = [
-                (
-                    axes[0, 0],
-                    altitudes,
-                    "Altitude",
-                    "Altitude (m)",
-                ),
-                (
-                    axes[0, 1],
-                    velocities,
-                    "Velocity",
-                    "Velocity (m/s)",
-                ),
-                (
-                    axes[1, 0],
-                    accelerations,
-                    "Acceleration",
-                    "Acceleration (m/s²)",
-                ),
-                (
-                    axes[1, 1],
-                    g_forces,
-                    "G-Force",
-                    "G",
-                ),
-                (
-                    axes[2, 0],
-                    thrusts,
-                    "Thrust",
-                    "Thrust (N)",
-                ),
-                (
-                    axes[2, 1],
-                    twrs,
-                    "TWR",
-                    "TWR",
-                ),
-            ]
-
-            for (
-                axis,
-                values,
-                title,
-                ylabel,
-            ) in graphs:
-                axis.plot(
-                    times,
-                    values,
-                )
-
-                axis.plot(
-                    times[index],
-                    values[index],
-                    marker="o",
-                )
-
-                axis.set_title(title)
-                axis.set_xlabel("Time (s)")
-                axis.set_ylabel(ylabel)
-                axis.grid(True)
-
-        else:
-            axis = self.figure.add_subplot(111)
-
-            if self.current_graph == "Altitude":
-                values = altitudes
-                ylabel = "Altitude (m)"
-
-            elif self.current_graph == "Velocity":
-                values = velocities
-                ylabel = "Velocity (m/s)"
-
-            elif self.current_graph == "Acceleration":
-                values = accelerations
-                ylabel = "Acceleration (m/s²)"
-
-            elif self.current_graph == "G-Force":
-                values = g_forces
-                ylabel = "G"
-
-            elif self.current_graph == "Thrust":
-                values = thrusts
-                ylabel = "Thrust (N)"
-
-            elif self.current_graph == "TWR":
-                values = twrs
-                ylabel = "TWR"
-
-            else:
-                values = []
-                ylabel = ""
-
-            axis.plot(
-                times,
-                values,
-            )
-
-            axis.plot(
-                times[index],
-                values[index],
-                marker="o",
-            )
-
-            axis.set_title(
-                self.current_graph
-            )
-
-            axis.set_xlabel(
-                "Time (s)"
-            )
-
-            axis.set_ylabel(
-                ylabel
-            )
-
-            axis.grid(True)
-
-        self.figure.tight_layout()
-        self.canvas.draw()
-
-    # ================================================================
-    # GRAPH SELECTION
-    # ================================================================
-
-    def select_graph(self, graph_name):
-        self.current_graph = graph_name
-
-        self.update_graph()
-
-        if self.results is not None:
-            index = self.time_slider.value()
-            self.update_graph_cursor(index)
-
-    # ================================================================
-    # SUMMARY
-    # ================================================================
-
-    def update_summary(self):
-        if self.results is None:
-            return
-
-        (
-            times,
-            altitudes,
-            velocities,
-            accelerations,
-            thrusts,
-            twrs,
-        ) = self.get_graph_data()
-
-        if not times:
-            return
-
-        max_altitude = max(
-            altitudes
-        )
-
-        max_velocity = max(
-            velocities
-        )
-
-        max_acceleration = max(
-            accelerations
-        )
-
-        max_g = max_acceleration / 9.80665
-
-        self.max_altitude_label.setText(
-            f"{max_altitude:.2f} m"
-        )
-
-        self.max_velocity_label.setText(
-            f"{max_velocity:.2f} m/s"
-        )
-
-        self.max_acceleration_label.setText(
-            f"{max_acceleration:.2f} m/s²"
-        )
-
-        self.max_g_label.setText(
-            f"{max_g:.2f} G"
-        )
-
-        burnout_time = self.results.get(
-            "burnout_time"
-        )
-
-        burnout_altitude = self.results.get(
-            "burnout_altitude"
-        )
-
-        apogee_time = self.results.get(
-            "apogee_time"
-        )
-
-        apogee_altitude = self.results.get(
-            "apogee_altitude"
-        )
-
-        if (
-            burnout_time is not None
-            and burnout_altitude is not None
-        ):
-            self.burnout_label.setText(
-                f"{burnout_time:.3f} s / "
-                f"{burnout_altitude:.2f} m"
-            )
-        else:
-            self.burnout_label.setText("-")
-
-        if (
-            apogee_time is not None
-            and apogee_altitude is not None
-        ):
-            self.apogee_label.setText(
-                f"{apogee_time:.3f} s / "
-                f"{apogee_altitude:.2f} m"
-            )
-        else:
-            self.apogee_label.setText("-")
-
-    # ================================================================
-    # RESET
-    # ================================================================
-
-    def reset_simulation(self):
-        motors = get_available_motors()
-
-        self.motor_dropdown.blockSignals(True)
-
-        self.motor_dropdown.clear()
-
-        for motor in motors:
-            self.motor_dropdown.addItem(
-                motor.stem,
-                motor,
-            )
-
-        self.motor_dropdown.blockSignals(False)
-
-        self.dry_mass_spinbox.setValue(
-            150.0
-        )
-
-        self.gravity_spinbox.setValue(
-            9.81
-        )
-
-        self.timestep_spinbox.setValue(
-            0.005
-        )
-
-        self.results = None
-
-        self.time_slider.setRange(
-            0,
-            0,
-        )
-
-        self.time_slider.setValue(
-            0
-        )
-
-        self.time_label.setText(
-            "0.000 s"
-        )
-
-        self.max_altitude_label.setText("-")
-        self.max_velocity_label.setText("-")
-        self.max_acceleration_label.setText("-")
-        self.max_g_label.setText("-")
-        self.burnout_label.setText("-")
-        self.apogee_label.setText("-")
-
-        self.figure.clear()
-
-        axis = self.figure.add_subplot(111)
-
-        axis.set_title(
-            "Run a simulation to view results"
-        )
-
-        axis.set_xlabel(
-            "Time (s)"
-        )
-
-        axis.grid(True)
-
-        self.figure.tight_layout()
-        self.canvas.draw()
-
-
-def main():
-    app = QtWidgets.QApplication([])
-
-    app.setStyleSheet(
-        MAIN_STYLE
-    )
-
-    window = MainWindow()
-    window.show()
-
+        self.set_record(rec)
+        self.tabs.setCurrentIndex(0)
+
+
+def main() -> None:
+    app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
+    assert isinstance(app, QtWidgets.QApplication)
+    app.setStyleSheet(MAIN_STYLE)
+    w = MainWindow()
+    w.show()
     app.exec()
 
 

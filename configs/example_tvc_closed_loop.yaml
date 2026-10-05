@@ -1,0 +1,35 @@
+# Closed-loop TVC example: sensors -> estimator -> PD attitude controller -> actuator -> physics.
+# The vehicle is the generic 29 mm example with the CG moved aft so it is statically UNSTABLE
+# (static margin about -0.7 cal); TVC must hold the nose near vertical while the motor burns:
+# measured max tilt 4.5 deg during burn closed-loop vs 178 deg (tumbling) without control, apogee
+# 302 m vs 94 m. After burnout there is no thrust authority, so the airframe tumbles (expected).
+# Larger instabilities (e.g. finless, SM -14 cal) exceed the TVC authority at 140 m/s -- try it.
+# (Illustrative, not a validated design.)
+config_version: 1
+name: tvc_closed_loop
+fidelity: 5
+simulation: {dt_s: 0.005, descent_dt_s: 0.05, t_max_s: 120}
+rocket:
+  body_diameter_m: 0.041
+  body_length_m: 1.0
+  nose: {shape: ogive, length_m: 0.17}
+  fins: {count: 4, root_chord_m: 0.10, tip_chord_m: 0.045, span_m: 0.07, sweep_m: 0.06, thickness_m: 0.002, position_from_nose_m: 0.82}
+  dry_mass_kg: 0.45
+  cg_from_nose_m: 0.80
+  inertia: {ixx_kgm2: 0.0006, iyy_kgm2: 0.06}
+  parachutes:
+    - {cd: 1.5, diameter_m: 0.6, trigger: apogee}
+motor:
+  file: data/motors/AeroTech_G80T.eng
+  ignition_delay_s: 2.0          # pad time for sensor alignment
+environment:
+  wind: {model: constant, speed_ms: 2.0, direction_from_deg: 270}
+launch: {elevation_deg: 90, rail_length_m: 1.5}
+tvc: {max_angle_deg: 6.0, max_rate_deg_s: 120.0, time_constant_s: 0.03, delay_s: 0.01}
+sensors:
+  accelerometer: {saturation: 400.0}
+estimator: {type: nav_kf, alignment_time_s: 1.5}
+controller:
+  type: tvc_attitude
+  rate_hz: 100
+  params: {wn: 8.0, zeta: 0.8, target: vertical}
