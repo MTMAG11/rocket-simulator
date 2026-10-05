@@ -83,6 +83,31 @@ COLUMNS: list[Column] = [
     _c("tvc_cmd_z", "rad", "commanded thrust deflection about z_B", "control", fid=3),
     _c("tvc_y", "rad", "actual thrust deflection about y_B", "control", fid=3),
     _c("tvc_z", "rad", "actual thrust deflection about z_B", "control", fid=3),
+    _c(
+        "fin_cmd_pitch",
+        "rad",
+        "commanded pitch deflection-equivalent (control surfaces)",
+        "control_surfaces",
+        fid=3,
+    ),
+    _c(
+        "fin_cmd_yaw",
+        "rad",
+        "commanded yaw deflection-equivalent (control surfaces)",
+        "control_surfaces",
+        fid=3,
+    ),
+    _c(
+        "fin_cmd_roll",
+        "rad",
+        "commanded roll deflection-equivalent (control surfaces)",
+        "control_surfaces",
+        fid=3,
+    ),
+    *[
+        _c(f"fin_{i}", "rad", f"actual deflection of control fin {i}", "control_surfaces", fid=3)
+        for i in range(8)
+    ],
     *_vec("meas_accel", "xyz", "m/s^2", "accelerometer specific force, body", "sensors", 4),
     *_vec("meas_gyro", "xyz", "rad/s", "gyroscope rate, body", "sensors", 4),
     _c("meas_baro_pressure", "Pa", "barometer static pressure", "sensors", fid=4),
@@ -98,24 +123,30 @@ COLUMNS: list[Column] = [
     *_vec("meas_gps_vel", "xyz", "m/s", "GPS velocity, launch frame", "sensors", 4),
     _c("meas_gps_new", "-", "1 when a new GPS sample became visible this row", "sensors", "int8", 4),
     *_vec("meas_mag", "xyz", "T", "magnetometer field, body", "sensors", 4),
-    _c("est_valid", "-", "1 when the estimator output is valid (aligned)", "estimator", "int8", 5),
-    _c("launch_detected", "-", "1 once the flight computer has detected launch", "estimator", "int8", 5),
-    *_vec("est_pos", "xyz", "m", "estimated position, launch frame", "estimator", 5),
-    *_vec("est_vel", "xyz", "m/s", "estimated velocity, launch frame", "estimator", 5),
-    *_vec("est_quat", "wxyz", "-", "estimated attitude quaternion", "estimator", 5),
+    _c("est_valid", "-", "1 when the estimator output is valid (aligned)", "estimator", "int8", 3),
+    _c("launch_detected", "-", "1 once the flight computer has detected launch", "estimator", "int8", 3),
+    *_vec("est_pos", "xyz", "m", "estimated position, launch frame", "estimator", 3),
+    *_vec("est_vel", "xyz", "m/s", "estimated velocity, launch frame", "estimator", 3),
+    *_vec("est_quat", "wxyz", "-", "estimated attitude quaternion", "estimator", 3),
 ]
 
 _BY_NAME = {c.name: c for c in COLUMNS}
 
 
-def columns_for(fidelity: int, estimator: bool = False) -> list[Column]:
-    """Columns present for a fidelity level (estimator group only when an estimator runs)."""
+def columns_for(fidelity: int, estimator: bool = False, n_fins: int = 0) -> list[Column]:
+    """Columns present for a fidelity level (estimator group only when an estimator runs; control-surface
+    columns only for vehicles with ``n_fins`` movable fins)."""
     out = []
     for c in COLUMNS:
         if c.min_fidelity > fidelity:
             continue
         if c.group == "estimator" and not estimator:
             continue
+        if c.group == "control_surfaces":
+            if n_fins == 0:
+                continue
+            if c.name.startswith("fin_") and c.name[4:].isdigit() and int(c.name[4:]) >= n_fins:
+                continue
         out.append(c)
     return out
 

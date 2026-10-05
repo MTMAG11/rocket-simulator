@@ -1,0 +1,14 @@
+Validation: genesis_euroc_2023
+  source: Genesis team (EuRoC 2023) via RocketPy example data  (quality: Tier 2: student team flight computer, 100 Hz filtered altitude AGL; parameters from a secondary source (RocketPy notebook))
+  simulation fidelity 3, dt 0.005 s, time shift applied -0.014 s
+
+  Apogee (AGL)                 real   2916.69  sim   2842.63 m      error   -74.06 ( -2.54 %)
+  Apogee time                  real     23.57  sim     23.03 s      error    -0.53 ( -2.26 %)
+  Max velocity                 real    322.76  sim    277.48 m/s    error   -45.28 (-14.03 %)
+  Landing time                 real    175.06  sim    187.55 s      error   +12.49 ( +7.14 %)
+  altitude (all)       n=17896  RMSE   79.800  MAE   70.954  max|e|  144.002  bias  +56.249  NRMSE  2.73 %
+  altitude (ascent)    n= 2457  RMSE   49.556  MAE   40.658  max|e|  137.791  bias   -8.061  NRMSE  1.70 %
+  altitude (descent)   n=15439  RMSE   83.610  MAE   75.776  max|e|  144.002  bias  +66.484  NRMSE  2.86 %
+  velocity             n= 2457  RMSE   20.334  MAE   13.036  max|e|   93.574  bias   -3.016  NRMSE  6.26 %
+  note: simulated altitude compared as: barometric
+  note: real velocity derived from altitude (0.6 s local quadratic fit); not independent data

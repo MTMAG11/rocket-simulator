@@ -2,6 +2,10 @@
 
 ## Install
 
+Use an **editable/source install** (`pip install -e .`): data files (`data/motors`, `experiments/`, benchmark output) and the registry
+are located relative to the source tree; a wheel install does not ship them. A clean install needs network access for the five
+dependencies (`pip install -e . --no-deps` works offline if they are already present).
+
 ```bash
 python -m venv .venv && .venv/Scripts/activate        # Windows (use bin/activate elsewhere)
 pip install -e ".[gui,dev]"                           # numpy, scipy, pyarrow, pyyaml, matplotlib (+ PySide6, pytest, ruff, mypy)
@@ -34,8 +38,8 @@ launch: {elevation_deg: 90, rail_length_m: 1.5}
 ```
 
 Other models are selected by name: `environment.atmosphere.model: isa | exponential | table`, `wind.model: none |
-constant | profile | power_law` (+ `turbulence_sigma_ms`, `gusts`), `rocket.aero.model: buildup | constant | table`,
-`controller.type: none | tvc_attitude | schedule | python`, `estimator.type: none | nav_kf`. Relative file paths resolve
+constant | profile | power_law` (+ `turbulence_sigma_ms`, `gusts`), `rocket.aero.model: simplified | barrowman | enhanced | table | table2d | constant` ([aerodynamics.md](aerodynamics.md)),
+`controller.type: none | tvc_attitude | schedule | python`, `estimator.type: none | nav_kf | truth`. Relative file paths resolve
 against the config's directory, then the project root. Motor formats: `.eng` (RASP) and `.csv`; register others with
 `rocket_sim.motor.register_loader`.
 
@@ -67,7 +71,9 @@ class MyController:
 | `validate FLIGHT.yaml [--out DIR]` | compare to real telemetry (metrics + plot + report) |
 | `export SOURCE [--run ID] --format ...` | convert a saved record or reproduce a dataset run |
 | `inspect DATASET [--run ID]` | browse a dataset without loading telemetry |
-| `benchmark [--quick]` | throughput measurements |
+| `benchmark [--quick] [--scales 1,100,1000,10000]` | throughput measurements and scaling ladder |
+| `validate-registry [--split development\|calibration\|holdout\|all] [--confirm-frozen] [--set k=v] [--calibration-id ID] [--migrate-fingerprint]` | flight registry with the holdout protocol ([validation.md](validation.md)) |
+| `experiment FILE.yaml [--verify DIR] [--list]` | versioned, reproducible dataset experiments |
 | `check CONFIG` | validate a config |
 | `schema [--json]`, `motors`, `gui` | schema, motor list, GUI |
 
@@ -82,3 +88,25 @@ uncertainties (`rocket_sim/uncertainty.py`).
 thread; select any number of schema variables for stacked, zoomable plots (matplotlib toolbar) with event markers; scrub
 the timeline (readout + 3-D rocket orientation/trajectory/ground/wind arrow, coloured by flight phase); Summary tab;
 Data browser tab (open a dataset directory, select a run, reproduce and plot it). Large generation is headless only.
+
+
+## Component-based vehicles, control surfaces (V1.1)
+
+```yaml
+rocket:
+  sections:                                   # nose tip aft; masses give the CG and the inertia tensor
+    - {type: nose, shape: ogive, length_m: 0.20, diameter_m: 0.054, mass_kg: 0.060}
+    - {type: body, length_m: 0.30, diameter_m: 0.054, mass_kg: 0.110}
+    - {type: transition, length_m: 0.08, aft_diameter_m: 0.041, mass_kg: 0.025}
+    - {type: body, length_m: 0.50, diameter_m: 0.041, mass_kg: 0.120}
+    - {type: boattail, length_m: 0.04, aft_diameter_m: 0.033, mass_kg: 0.010}
+  masses: [{name: avionics, mass_kg: 0.08, position_from_nose_m: 0.40}]
+  control_surfaces: {count: 4, root_chord_m: 0.10, tip_chord_m: 0.06, span_m: 0.09, position_from_nose_m: 0.88,
+                     max_deflection_deg: 20, max_rate_deg_s: 400, time_constant_s: 0.01}
+controller: {type: tvc_attitude, use_truth: true, params: {actuation: fins, roll_damping: 2.0}}   # tvc | fins | both
+estimator: {type: truth}                      # truth | nav_kf | none
+```
+
+See [vehicle.md](vehicle.md), `configs/example_components.yaml` and `configs/domain_randomization.yaml`. A custom controller's
+`Command` has `tvc_y, tvc_z, fin_pitch, fin_yaw, fin_roll` (radians). Overrides are *dotted paths*
+(`rocket.inertia: {...}`); a nested mapping under a section name replaces the whole section.

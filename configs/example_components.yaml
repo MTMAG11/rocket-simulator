@@ -1,0 +1,27 @@
+# Component-based airframe (V1.1): nose + payload bay + transition + motor section + boat-tail, with CG and the
+# inertia tensor COMPUTED from component masses (no hand-typed CG). Geometry and masses are illustrative.
+config_version: 1
+name: example_components
+fidelity: 3
+simulation: {dt_s: 0.01, descent_dt_s: 0.05, t_max_s: 300, integrator: rk4}
+rocket:
+  name: two-diameter-demo
+  sections:
+    - {type: nose, shape: ogive, length_m: 0.20, diameter_m: 0.054, mass_kg: 0.060}
+    - {type: body, length_m: 0.30, diameter_m: 0.054, mass_kg: 0.110}        # payload bay
+    - {type: transition, length_m: 0.08, aft_diameter_m: 0.041, mass_kg: 0.025}
+    - {type: body, length_m: 0.50, diameter_m: 0.041, mass_kg: 0.120}        # motor section
+    - {type: boattail, length_m: 0.04, aft_diameter_m: 0.033, mass_kg: 0.010}
+  fins: {count: 4, root_chord_m: 0.10, tip_chord_m: 0.045, span_m: 0.07, sweep_m: 0.06, thickness_m: 0.002, position_from_nose_m: 1.02, mass_kg: 0.040}
+  masses:
+    - {name: avionics, mass_kg: 0.080, position_from_nose_m: 0.40}
+    - {name: recovery, mass_kg: 0.050, position_from_nose_m: 0.62}
+  motor_aft_from_nose_m: 1.12
+  parachutes:
+    - {cd: 1.5, diameter_m: 0.60, trigger: apogee}
+  aero: {model: barrowman}
+motor: {file: data/motors/AeroTech_G80T.eng}
+environment:
+  atmosphere: {model: isa}
+  wind: {model: none}
+launch: {elevation_deg: 90, rail_length_m: 1.5}

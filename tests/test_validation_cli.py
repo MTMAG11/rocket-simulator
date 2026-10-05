@@ -94,7 +94,7 @@ def test_self_consistency_simulated_flight_vs_itself_has_zero_error():
     ],
 )
 def test_real_flight_regression(flight, limits):
-    """Regression guard on the documented validation results (physics v1.1.0, uncalibrated)."""
+    """Regression guard on the documented validation results (physics v1.2.0, uncalibrated)."""
     r = run_validation(VAL / f"{flight}.yaml", plot=False)
     assert abs(r.metrics["apogee"]["pct_error"]) < limits["apogee"]
     assert r.metrics["altitude_all"]["nrmse_pct"] < limits["alt_nrmse"]

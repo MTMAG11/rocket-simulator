@@ -1,158 +1,219 @@
 # Validation
 
-Validation hierarchy followed (spec section 77): analytic physics -> unit tests -> known rocket calculations ->
-independent simulator -> real flight data -> multiple real flights. Numbers below are reproducible:
+Validation hierarchy followed: analytic physics -> unit tests -> known-rocket calculations -> independent simulator ->
+real flight data -> multiple real flights **with a held-out set**. Everything below is reproducible:
 
 ```bash
-rocketsim validate validation_data/bella_lui.yaml --out validation_results/physics_v1.1.0
-rocketsim validate validation_data/ndrt_2020.yaml --out validation_results/physics_v1.1.0
-rocketsim validate validation_data/prometheus.yaml --out validation_results/physics_v1.1.0
-python validation_data/crosscheck_rocketpy.py
+rocketsim validate-registry --split development --out validation_results/registry_dev
+rocketsim validate-registry --split calibration --out validation_results/registry_cal
+rocketsim validate-registry --split holdout --confirm-frozen          # logged; see section 3
+python validation_data/crosscheck_rocketpy.py                         # trajectory cross-check (RocketPy)
+python validation_data/crosscheck_geometry.py                         # CP / CNalpha cross-check (RocketPy)
 ```
 
-## 1. Analytic and unit validation
+## 0. How to read the numbers (read this first)
 
-`tests/` (160 tests) checks against closed-form solutions, not against the simulator itself: free fall, vacuum
-projectile range/apogee, the Tsiolkovsky rocket equation with gravity (burnout velocity and altitude to 1e-8 relative),
-quadratic-drag fall (`tanh`/`ln cosh`), wind through relative velocity (algebraic relaxation law), torque-free
-axisymmetric precession (Euler equations, 1e-6), constant-rate rotation, small-angle weathercock oscillation frequency
-(`omega_d`, 1 %), CP-ahead-of-CG divergence, tail-first instability, TVC torque, ISA vs the published 1976 table at all
-layer boundaries, motor impulse by independent quadrature, integrator order of accuracy (1, 2, 4), quaternion/DCM
-identities, convergence in dt. Details: [testing.md](testing.md).
+* **Every flight carries a split label.** *Development* flights shaped the model (structure was adjusted after seeing
+  them); agreement on them is **in-sample** and is never quoted as evidence. *Calibration* flights may be used to fit
+  physically bounded shared parameters. *Holdout* flights were never used for either and are evaluated once, with the
+  model frozen, through a logged protocol (section 3).
+* **All ground truth is Tier 2 or 3** (university-team flight computers / COTS altimeters, parameters from a secondary
+  source). None of the flights has measured wind, a measured temperature profile, verified masses or motor impulse. An
+  apogee error of a few percent is **not** attributable to the physics (section 6 quantifies how much the unmeasured
+  inputs alone move apogee: 3-7 % one sigma, depending on the vehicle).
+* **No small-rocket (<1 kg) validation data exist in this repository.** This is an open gap (section 7), not a result.
+* The simulator is **not** validated for supersonic flight (no flight exceeded ~Mach 0.9 in the simulation), attitude
+  dynamics, sensors on real data, or TVC/fin control on real data.
 
-## 2. Independent cross-check: RocketPy
+## 1. Flight registry, tiers and splits
 
-`validation_data/crosscheck_rocketpy.py` runs RocketPy 1.13 and this simulator on an identical vehicle (Prometheus
-geometry/mass, M1520 thrust curve, Cd = 0.45 constant, standard atmosphere, variable gravity, no wind, ends at apogee):
+`validation_data/registry.yaml` is the single source of truth. Source tiers: 1 = instrument-grade, measured inputs;
+2 = team flight computer / COTS altimeter with team-supplied parameters; 3 = sparse or undocumented sensor; 4 = prose or
+summary only (not usable for metrics). **No Tier 1 data were available.**
 
-| launch elevation | quantity | this sim | RocketPy | diff |
-|---|---|---|---|---|
-| 90 deg | apogee [m] | 3768.81 | 3775.17 | -0.17 % |
-| 90 deg | apogee time [s] | 27.30 | 27.34 | -0.18 % |
-| 90 deg | max speed [m/s] | 319.09 | 319.18 | -0.03 % |
-| 90 deg | rail-exit speed [m/s] | 27.06 | 27.15 | -0.32 % |
-| 80 deg | apogee [m] | 3613.58 | 3620.09 | -0.18 % |
-| 80 deg | horizontal range at apogee [m] | 1299.6 | 1307.1 | -0.57 % |
+| flight | split | tier | motor | liftoff mass | telemetry | notes |
+|---|---|---|---|---|---|---|
+| EPFL *Bella Lui* 2020 | development | 2 | AeroTech K828FJ | 19.6 kg | altitude + vertical velocity, ~15 Hz | boat-tail not modelled |
+| Notre Dame 2020 | development | 2 | Cesaroni L1395 | 23.3 kg | altitude 20 Hz + axial accel 400 Hz | two-diameter airframe not representable by the single-diameter config; accel scale unknown |
+| *Prometheus* 2022 | development | 2 | Cesaroni M1520 | 20.7 kg | AltOS TeleMetrum height + signed vertical velocity | model structure (base drag, roughness) was changed after seeing this flight |
+| *Genesis* (EuRoC 2023) | calibration | 2 | Cesaroni L995 | 11.2 kg | team flight computer altitude, 100 Hz | |
+| *Astra* (EuRoC 2022) | calibration | 3 | Cesaroni L1350 | 12.7 kg | altitude, ~1 Hz, sensor undocumented | timing and RMS are not meaningful at 1 Hz |
+| *Erebus 11* (EuRoC 2022) | **holdout** | 2 | ProK54 (curve from RocketPy file) | 7.0 kg | COTS altimeter altitude, 20 Hz | propellant mass from grain geometry; boat-tail modelled |
+| *Cavour* (Polito, EuRoC 2023) | **holdout** | 2 | Cesaroni L995 | 10.2 kg | altimeter altitude, ~6 Hz (the file's velocity column is not used; v_max is derived from altitude) | the YAML had a quoting error in its column name (`altitude[m]`) fixed minutes before this flight's holdout run; no model input changed |
 
-Both codes agree to < 0.6 % on everything including the weathercocking trajectory; static margin agrees (1.0 cal).
-Residual differences are consistent with different gravity/atmosphere implementations and integrator tolerances. This
-shows the *dynamics* agree; it says nothing about drag-model accuracy because Cd is prescribed. (OpenRocket was not
-available in this environment; RocketPy is an independent established tool, and neither is assumed to be correct.)
+Excluded (documented in the registry): hybrid/liquid flights (Defiance, Halcyon, Hedy), Lince (mid-ascent mass-change event),
+and four larger flights not yet reconstructed. The arXiv 1708.01970 Estes paper has no usable time series (Tier 4).
 
-## 3. Real flight data
+**Reconstruction conventions, fixed before any calibration/holdout flight was simulated**: geometry/mass/inertia from the
+RocketPy notebook of each flight; RocketPy's `mass` is taken to *include* the empty motor casing (so the motor `.eng`
+copies used here have total weight = propellant weight); von Karman noses are approximated by tangent ogives; fin sweep =
+root - tip; fin thickness 3 mm; no wind; ISA +8 K; launch 84 deg, rail 12 m (the RocketPy example values - not measured);
+ascent-only comparison for flights with undocumented parachutes.
+The order of events (conventions and split written down, then calibration flights, then the calibration record, then the holdout
+runs) is attested by the process and by the timestamps in `holdout_log.jsonl`; it is **not independently timestamped** (the
+repository state is uncommitted), so a reader has to trust it. The calibration flights were seen before the holdout ones, but
+no model change was made in between.
 
-Sources, selected for having both telemetry and published vehicle parameters. All three come from RocketPy's public
-example data (MIT-licensed repository); the original teams gave permission for the data to be used. Assessed quality:
-**university-team amateur flights, altimeter-grade telemetry, vehicle parameters from a secondary source (RocketPy
-documentation)**. They are *not* NASA-grade ground truth.
+**The mass convention matters as much as any model choice**: adding the .eng casing mass on top of the reported mass moves
+apogee by **-12 % (Genesis), -9.6 % (Cavour), -10 % (Astra)** (`validation_results/sensitivity_error_budget.json`).
 
-| flight | rocket / motor | vehicle | telemetry | sampling | known uncertainties |
+Time alignment: the simulation is shifted so both cross 15 m (barometric-equivalent altitude); this removes only the
+launch-detect offset. The applied shift is printed in every report and is <= 0.5 s for all flights. Altitude comparison:
+simulated static pressure -> standard-atmosphere altimeter reading (like-for-like with a barometric altimeter).
+
+**Alignment diagnostic** (reported by every comparison; scan of +-1.5 s extra shift on ascent altitude RMSE). Best extra shift /
+RMSE change: Bella Lui +0.03 s (3.3 -> 3.3 m); NDRT +0.83 s (116 -> 85 m); Prometheus +0.60 s (147 -> 113 m); Genesis +0.13 s
+(50 -> 46 m); Astra -0.63 s (102 -> 28 m, 1 Hz data). The applied alignment is not tuned to this; the residuals show that for
+NDRT and Prometheus part of the altitude RMSE is timing/shape error of the boost phase, not a pure offset. (Not run for the
+holdout flights: that would be a logged re-evaluation, and the diagnostic does not change any apogee number.)
+
+## 2. Results (physics 1.2.0 numbers; physics 1.2.1 changed only fin-controlled flights, see physics.md change log; nominal inputs, nothing fitted)
+
+| flight | split (label) | apogee real / sim [m] | **apogee error** | t_apogee error | v_max error | ascent altitude RMSE / bias [m] |
+|---|---|---|---|---|---|---|
+| Bella Lui | development (in-sample) | 459 / 461 | **+0.50 %** | -1.02 % | -5.7 % | 3 / +2 |
+| NDRT 2020 | development (in-sample) | 1320 / 1497 | **+13.41 %** | +5.25 % | +13.1 % | 116 / +102 |
+| Prometheus | development (in-sample) | 3904 / 3712 | **-4.90 %** | -5.60 % | -0.3 % | 147 / +17 |
+| Genesis | calibration | 2917 / 2843 | **-2.54 %** | -2.26 % | -14.0 % | 50 / -8 |
+| Astra | calibration | 3249 / 3219 | **-0.93 %** | +2.82 % | n/a | (1 Hz data) |
+| Erebus 11 | **HOLDOUT** | 3002 / 2810 | **-6.40 %** | -1.95 % | **-25.0 %** | 124 / -110 |
+| Cavour | **HOLDOUT** | 2789 / 2915 | **+4.52 %** | -2.39 % | -8.1 % | 107 / +92 |
+
+RMS apogee error: development (in-sample) 8.25 %; calibration 1.91 %; **holdout 5.54 % (n = 2)**; the four flights not
+used for development (calibration + holdout) 4.1 %. Two holdout flights cannot establish a generalisation claim; they
+show only that the nominal model is not wildly off on two new vehicles and motors, with errors of both signs. The v_max
+errors for Genesis/Erebus/Cavour use a velocity derived from altitude (0.6 s local fit), not an independent measurement.
+
+**Open issue (Erebus 11, holdout).** The real altitude record implies a burnout speed of roughly Mach 1 (derived v_max
+about 385 m/s); the simulation peaks at 289 m/s even though the apogee is only 6 % low. A burnout-speed gap of that size
+points at an input/convention problem for this flight (reported mass vs. propellant mass, thrust-curve impulse) rather than
+the drag model, but this was **not** investigated by re-tuning, because re-running the flight under changed conventions
+after seeing the result would make it a development flight (the protocol would label it a re-evaluation). It is reported
+as unexplained. It also means the transonic/supersonic code paths (section 5 of `aerodynamics.md`) remain unvalidated.
+
+## 3. Holdout protocol and log
+
+`rocketsim validate-registry --split holdout` refuses to run holdout flights without `--confirm-frozen`; each run
+appends to `validation_results/holdout_log.jsonl`: flight, UTC time, physics version, **fingerprint of the physics source**
+(SHA-256 over the parsed syntax trees of `physics/ vehicle/ environment/ motor/ simulation/ config/ constants.py`, so
+reformatting does not matter and any executable change does), overrides, calibration id, results. If the fingerprint later
+changes, earlier results show as **STALE** and a re-run is labelled "RE-EVALUATION ... no longer a clean holdout".
+A behaviour-preserving change (the code was reformatted and the fingerprint definition changed after the holdout run) is
+declared with `--migrate-fingerprint`, which re-simulates every logged entry and writes a migration record **only if all
+reproduce** (they did, to 1e-9; recorded in the log).
+
+The log (`validation_results/holdout_log.jsonl`) contains the two nominal first evaluations, the two evaluations of the
+pre-declared secondary hypothesis below (calibration cal-001; labelled "first holdout evaluation" because they were written by
+separate runs - they are *not* independent tests of the same flight) and migration records. **Hardening after the first review:**
+the CLI now writes to this log by default (`--log`), refuses holdout evaluation without a log or when the registry's
+`frozen_physics_version` differs from the code, `validate` refuses holdout flights, new entries carry a SHA-256 hash chain
+(`verify_log`), and `validate-registry --status` prints each holdout flight's status and the chain check. Entries written from 1.2.1 on also record SHA-256 hashes of the flight definition, sim config, telemetry, motor file and the
+comparison code (`inputs_sha256`). **Known gaps:** the chain does not protect the *last* line or a truncated tail (an external
+anchor, e.g. committing the log, is needed), and nothing is committed to git. The first four entries
+pre-date the chain (they were assembled from two per-run logs) and are therefore **trust-based**, like the order of events.
+**Status rule: after any edit to the physics source, run `--status`; if it says `stale`, run `--migrate-fingerprint` (which
+re-simulates the logged entries and records equivalence only if they reproduce) or accept that the holdout is no longer clean.**
+
+## 4. Calibration record (cal-001: global drag multiplier)
+
+`validation_data/calibration_records.yaml` stores old value, proposed value, reason, evidence and effect. Fitted only on
+the calibration flights (Genesis, Astra) within physical bounds [0.7, 1.3]: `drag_scale = 0.957`, which improves those two
+flights (-2.5 -> -0.8 %, -0.9 -> +0.8 %). The leave-one-out criterion technically passes (1.50 % vs 1.91 %) but with two
+flights (one Tier 3) and one fold getting worse this is not credible evidence; **it was not adopted.** As a declared
+secondary test, the holdout flights were also evaluated with it:
+
+| holdout flight | nominal | with drag_scale 0.957 |
+|---|---|---|
+| Erebus 11 | -6.40 % | -4.48 % |
+| Cavour | +4.52 % | +6.65 % |
+| RMS | 5.54 % | 5.67 % |
+
+The calibration does not improve the holdout RMS (and moves the two flights in opposite directions): the data do not
+support a global drag correction. The development flight NDRT (+13.4 %) wants *more* drag, the others less: one number
+cannot absorb the residuals, which look like input/convention error rather than a drag-level error.
+
+## 5. Independent cross-checks (RocketPy 1.13)
+
+*Trajectory* (`crosscheck_rocketpy.py`, identical vehicle, constant Cd, standard atmosphere, no wind): apogee -0.18 %,
+apogee time -0.18 %, max speed -0.03 %, rail-exit speed -0.32 %, 80-deg launch range -0.5 % - still < 1 % after the V1.1
+geometry/aero refactor. This checks the dynamics, not the drag model.
+
+*Geometry/stability* (`crosscheck_geometry.py`, new in V1.1): the same nose/fin/boat-tail geometry built in RocketPy for
+four EuRoC vehicles:
+
+| vehicle | CNa RocketPy | CNa here | CP RocketPy [m from nose] | CP here | CP diff |
 |---|---|---|---|---|---|
-| EPFL Rocket Team *Bella Lui*, Kaltbrunn, 22 Feb 2020 | AeroTech K828FJ (54 mm) | 156 mm dia, 2.68 m, liftoff 19.6 kg, 3 fins, drogue only | altitude AGL + vertical velocity (filtered), 767 samples | ~15 Hz (irregular) | atmosphere (ERA5 not available), wind, boat-tail not modelled, filtered velocity lag |
-| Notre Dame Rocket Team, Three Oaks MI, 23 Feb 2020 | Cesaroni L1395 (75 mm) | 203 mm dia, 3.39 m, liftoff 23.3 kg, 3 fins, drogue + main | altitude (ft AGL) ~20 Hz + axial accelerometer 400 Hz (burn only, 4.5 s); team-reported apogee 4320 ft | 20 Hz / 400 Hz | **two-diameter airframe (203 -> 155 mm) not representable**, wind/atmosphere unknown, accelerometer scale unknown (reads 0.8-0.9 g at rest) |
-| *Prometheus*, Spaceport America, 24 Jun 2022 | Cesaroni M1520 (98 mm) | 139.7 mm dia, 2.23 m, liftoff 20.65 kg, 3 fins, drogue + main | AltOS TeleMetrum height AGL (barometric, lags in boost) + *total* speed (Kalman-filtered), pad pressure 86444 Pa | ~25 Hz | wind and temperature profile unknown; Von Karman nose approximated by an ogive |
+| Erebus 11 (with boat-tail) | 8.075 | 8.075 | 1.5752 | 1.5719 | -0.036 cal |
+| Genesis | 13.657 | 13.657 | 1.8997 | 1.8984 | -0.014 cal |
+| Cavour | 10.505 | 10.505 | 2.1569 | 2.1535 | -0.032 cal |
+| Astra | 16.061 | 16.061 | 1.4930 | 1.4918 | -0.012 cal |
 
-Reconstruction rules (documented in each `validation_data/*_sim.yaml`): geometry/mass/chutes from the team parameters;
-motor = ThrustCurve.org thrust curve of the actual motor; atmosphere = ISA with the site elevation and a temperature
-offset that is a *climatological estimate* (-8 K, -12 K, +15 K; not tuned), except Prometheus whose sea-level pressure is
-derived from the *measured* pad pressure (verified: ISA with the +15 K offset and this sea-level pressure gives 86444 Pa at 1401 m; an earlier version of this file used a value that gave 87180 Pa, found by the critic review); published inertias were implausible for two vehicles (e.g. Iyy 0.78 kg m^2 for a
-2.7 m, 19.6 kg rocket) so a thin-tube estimate is used there; unknown fin thickness assumed 3-4 mm. Time alignment: the
-simulation is shifted so both cross 15 m altitude at the same instant (removes only the launch-detect offset).
+CNa is identical (same Barrowman equations, independent implementation); the CP offset is the von Karman (RocketPy,
+0.5 L) vs tangent-ogive (here, 0.466 L) nose CP. OpenRocket was **not** used: a jar would have to be downloaded and
+executed from the internet, which was not authorised; RocketPy is the independent code. Neither tool is assumed correct.
 
-### Altitude methodology (important; found by the second critic review)
+## 6. Input-uncertainty Monte Carlo
 
-All three real altimeters are **barometric**. Earlier versions of this document compared them with the simulation's
-*geometric* height, which hides the effect of the real atmosphere's temperature on a pressure altimeter. The comparison
-now converts the simulated static pressure to the altitude a standard-atmosphere barometer would report
-(`validation/telemetry.py::_baro_equivalent_altitude`, pad pressure as reference) -- like with like. Because the day's
-temperature profile is unknown, the temperature offsets (-8 / -12 / +15 K) are *estimated inputs that act as hidden free
-parameters*: +-10 K moves the barometric apogee by roughly 2-3.5 points per side (table below). Geometric-height comparisons are available
-with `telemetry.altitude_reference: geometric` and gave -2.3 / +8.7 / +0.03 %.
+`validation_results/input_uncertainty_mc.json` (module `validation/input_mc.py`; **150 samples per flight**, seed 1; rerun
+with n = 150 after the first review found n = 40 too noisy: the 5-95 % edges moved by up to 60 m). Priors, 1-sigma: wind speed
+|N(0,3)| m/s with uniform direction; air temperature +N(0,4) K; launch elevation +N(0,1.5) deg; mass x N(1, 0.02); thrust
+x N(1, 0.03); optionally drag x N(1, 0.07). (The holdout flights are re-simulated here with perturbed inputs; this is an
+uncertainty analysis, not a new logged holdout evaluation, and nothing was tuned.)
 
-### Results, physics v1.1.0 (nominal inputs, no fitted constants; model structure changed after seeing Prometheus)
+| flight (split) | real [m] | MC mean +- sd, inputs only | real inside 90 % band? | z | with drag +-7 % | inside? |
+|---|---|---|---|---|---|---|
+| Bella Lui (dev) | 459 | 462 +- 32 | yes | -0.09 | 458 +- 33 | yes |
+| NDRT (dev) | 1320 | 1503 +- 78 | **no** | -2.35 | 1495 +- 83 | **no** (z -2.10) |
+| Prometheus (dev) | 3904 | 3711 +- 144 | yes (p95 = 3908, at the edge) | +1.34 | 3688 +- 176 | yes |
+| Genesis (cal) | 2917 | 2841 +- 115 | yes | +0.65 | 2828 +- 147 | yes |
+| Astra (cal) | 3249 | 3216 +- 120 | yes | +0.28 | 3201 +- 154 | yes |
+| Erebus 11 (**holdout**) | 3002 | 2808 +- 96 | **no** | +2.02 | 2798 +- 138 | yes |
+| Cavour (**holdout**) | 2789 | 2911 +- 91 | yes | -1.35 | 2902 +- 137 | yes |
 
-| metric | Bella Lui | NDRT 2020 | Prometheus |
-|---|---|---|---|
-| apogee, real / sim (barometric) [m] | 459.0 / 461.3 | 1320.4 / 1497.7 | 3903.8 / 3712.6 |
-| **apogee error** | **+0.50 %** | **+13.43 %** | **-4.90 %** |
-| apogee time error | -1.02 % (-0.10 s) | +5.25 % (+0.85 s) | -5.60 % (-1.62 s) |
-| max velocity error | -5.73 % | +13.11 % (derived from altitude) | -0.26 % (vertical velocity) |
-| max axial acceleration error | n/a | +9.68 % (sensor scale unknown) | n/a |
-| burnout time error | n/a | -1.87 % (-0.06 s) | n/a |
-| landing time error | +1.29 % | +16.74 % | -4.42 % |
-| altitude RMSE / MAE / max / bias [m] | 3.6 / 3.0 / 9.0 / +1.2 | 130.8 / 117.3 / 218.9 / +117.3 | 141.1 / 122.4 / 415.5 / -45.8 |
-| altitude NRMSE (of range) | 0.77 % | 9.89 % | 3.61 % |
-| ascent-only altitude RMSE [m] | 3.3 | 116.5 | 146.8 |
-| velocity RMSE / bias [m/s] | 3.4 / -2.3 | 14.3 / +10.2 | 10.7 / -9.4 |
+With inputs only, 5 of 7 observed apogees fall inside the 90 % band (NDRT and Erebus 11 do not); with an added +-7 % drag
+uncertainty 6 of 7 do (NDRT still does not, z = -2.1). For 7 flights, ~6 of 7 inside a 90 % band is what a calibrated
+model would give, so **the result is consistent with calibrated uncertainty, not evidence of accuracy**; but the 7 % was chosen
+*after* seeing that inputs alone missed some flights, so it is a fitted nuisance term, and the bands (+-4-5 %) are wide enough
+that covering a flight is a weak test. NDRT (two-diameter airframe the model cannot represent) and Erebus 11 (unexplained
+burnout speed) are the outliers, which points at model-form/convention problems, not at the sampled inputs.
 
-RMS apogee error over the three flights: **8.3 %** (mean absolute 6.3 %). "Barometric" is certain only for AltOS (documented); the Bella Lui and NDRT altimeters are *assumed* barometric, as nearly all hobby altimeters are. Plots: `validation_results/physics_v1.1.0/*.png`.
-The Prometheus time alignment uses the 50 m/s crossing of the velocity channel because AltOS height is barometric and
-lags during boost (avionics-bay pressure lag); this choice was made after seeing the altitude lag (a judgement call).
-The AltOS `speed` column is **signed vertical velocity** (it reaches -38 m/s on descent and 0 at apogee; an earlier
-version of this document wrongly called it total speed, found by the third critic review). Its time integral to apogee is
-4175 m versus a barometric apogee of 3904 m. Together with the -9.4 m/s velocity bias this means the simulated
-coast decelerates too fast and the real *geometric* apogee was probably ~4.1-4.2 km, i.e. ~6 % above the simulation: the
-earlier geometric "+0.03 %" for Prometheus was a coincidence of two errors, not agreement.
+## 7. Small-rocket investigation (gap, not a result)
 
-### Baseline (v1.0.0) and what changed
+No public telemetry for a <1 kg rocket with documented mass, motor and altimeter was found (altimeter-cloud flights lack
+mass and motor; the Estes paper is prose). Therefore **the simulator is unvalidated below ~5 kg**. What can be said
+analytically (`error_budget.md`, section 3): for the 0.45 kg, 41 mm example vehicle the first-order apogee uncertainty
+from unmeasured inputs is 8.5 % (vs. 6.5 % for the 11 kg Genesis), dominated by fin thickness (5.1 % per mm), surface
+roughness (4.5 %) and drag level (3.8 %) - the same terms that dominate small real rockets, plus launch-rail and
+tip-off effects that are not modelled. Required next step: a weighed Estes/Aerotech-class flight with a logged altimeter.
 
-Baseline numbers (geometric altitude comparison, the methodology of the time): Bella Lui -4.37 %, NDRT +0.19 %, Prometheus
--11.14 %. v1.1.0 under the same geometric comparison: -2.29 / +8.71 / +0.03 % (corrected Prometheus pressure). With the
-barometric comparison the model-change evidence is weaker: see the table above (+0.5 / +13.4 / -4.9 %).
+## 8. Earlier (V1) material that still stands
 
-Calibration loop (spec 37):
+* Analytic and unit validation (`tests/`, 294 tests): free fall, vacuum projectile, Tsiolkovsky with gravity, quadratic
+  drag fall, torque-free precession, constant-rate quaternion integration, weathercock frequency, TVC torque, ISA table,
+  motor impulse, integrator order, quaternion identities, and since V1.1: Barrowman by hand, inertia tensor vs independent
+  summation, Euler equations for asymmetric bodies, control-surface force/moment analytics, mixer decoupling, actuator
+  rate/lag/delay exactness, 5-step convergence ladder, conservation limits ([testing.md](testing.md)).
+* The AltOS `speed` column of the Prometheus log is signed *vertical* velocity (found by an earlier critic review); its
+  integral to apogee (4175 m) exceeds the barometric apogee (3904 m), so the real geometric apogee was probably 4.1-4.2 km
+  and the V1 geometric "+0.03 %" was a coincidence of two errors. Barometric-equivalent comparison is used throughout.
+* V1 leave-one-out drag calibration on the three development flights was rejected (RMS 8.3 % -> 14.2 %).
+* The V1 model-change history (Hoerner base drag, Raymer roughness cut-off) is in `physics.md` (change log 1.1.0): it was
+  motivated by Prometheus, so Prometheus is in-sample.
 
-1. **Simulate / compare**: Prometheus apogee 11 % low (geometric) and 3.5 s early although max velocity was right.
-2. **Identify**: too much drag after burnout at high subsonic speed.
-3. **Physical cause**: the team's RASAero Cd(M) falls 0.42 -> 0.30 over M 0.1-0.85 while this model's rose 0.45 -> 0.55;
-   the Barrowman subsonic base-drag term `0.12 + 0.13 M^2` accounted for the whole rise; Hoerner's relation
-   `0.029/sqrt(Cd_forebody)` is Mach-independent subsonically; the roughness floor had omitted compressibility.
-4. **Modify**: replace those terms with literature models (no fitted constant), for all vehicles.
-5. **Re-run / measure**: tables above.
-6. **Do not overfit**: the change was motivated by Prometheus, so Prometheus is **in-sample**; Bella Lui improved (geometric)
-   and NDRT worsened (+0.2 -> +8.7 % geometric). Three flights cannot establish generalisation, and the barometric
-   comparison shows errors of +0.5 / +13.4 / -4.9 %, i.e. no flight is predicted better than ~5 % except Bella Lui.
+## 9. What this validation shows and does not show
 
-**Reading the NDRT result.** NDRT is over-predicted by 13 % (geometric 8.7 %). The vehicle has a two-diameter airframe
-this model cannot represent, the thrust-curve sensitivity (below) shows a -5 % total impulse would nearly remove the
-error (within certification tolerance, but **untestable here**: no motor impulse measurement exists), and the winter
-temperature offset is a guess. These are candidate explanations, not findings.
+* **Shows**: an uncalibrated first-principles model predicts apogee of seven 7-24 kg solid-motor rockets (459 m to 3.9 km)
+  with errors of -6.4 to +13.4 % (RMS 6.2 % over all seven; 5.5 % over the two holdout flights), agrees with RocketPy to
+  < 1 % on dynamics and exactly on CNa, and is consistent with 6 of the 7 flights when a (post hoc) +-7 % drag uncertainty is allowed (NDRT is not).
+* **Does not show**: supersonic accuracy (unresolved Erebus 11 burnout-speed gap), anything below ~5 kg, wind response,
+  descent accuracy (chute data assumed), attitude fidelity (no attitude telemetry), sensor or estimator performance on real
+  data, control-surface or TVC behaviour on real data (none exists in the registry; those subsystems are verified by
+  analytic tests and closed-loop simulation only).
+* **Statistical power**: n = 2 holdout flights. Treat all generalisation statements as provisional.
 
-### Sensitivity of apogee error (barometric comparison)
+## 10. Next validation steps
 
-| input change | Bella Lui | NDRT | Prometheus |
-|---|---|---|---|
-| nominal | +0.50 % | +13.43 % | -4.90 % |
-| temperature offset -10 K / +10 K | +3.86 / -2.66 % | +16.51 / +10.53 % | -3.07 / -6.65 % |
-| thrust x0.95 / x1.05 | -9.42 / +10.75 % | +4.76 / +22.11 % | -10.01 / -0.13 % |
-
-A +-5 % impulse variation moves apogee by ~+-10 %, and +-10 K by 3-6 points: the unknown inputs are comparable to the
-model error, so individual flight errors cannot be attributed to the drag model.
-
-### Leave-one-out calibration of a global drag multiplier (`validation_results/loo_drag_scale.txt`)
-
-| held-out flight | fitted on | fitted `drag_scale` | apogee error: nominal | calibrated |
-|---|---|---|---|---|
-| Bella Lui | NDRT, Prometheus | 1.133 | +0.50 % | -0.75 % |
-| NDRT | Bella Lui, Prometheus | 0.879 | +13.43 % | +17.67 % |
-| Prometheus | Bella Lui, NDRT | 1.430 | -4.90 % | -17.08 % |
-
-RMS held-out error: nominal 8.26 %, calibrated 14.19 %. **Verdict: not supported; the model stays uncalibrated** (the
-protocol in `rocket_sim.validation.calibrate` only accepts a calibration that improves held-out flights).
-
-## 4. What this validation does and does not show
-
-* Shows: an uncalibrated first-principles model predicts apogee of three 20 kg-class rockets (459 m to 3.9 km, Mach up to
-  ~0.9) to +0.5 / +13 / -5 % (barometric, RMS 8 %), burnout timing to ~2 % (one flight), and agrees with an independent simulator to < 1 %.
-* Does not show: supersonic accuracy (no flight exceeded Mach 0.95), small model rockets, descent-rate accuracy (chute
-  data are assumed, landing time errors up to 17 %), accelerometer-level fidelity (only one burn-phase record, unknown
-  scale), 6-DOF attitude fidelity (no attitude telemetry available), wind response (no wind data), sensor models,
-  estimator performance on real data, or anything about TVC/control (no real TVC flight data was found or used).
-* Quality of ground truth: secondary-source parameters, filtered altimeter outputs, unknown atmosphere. Errors of a few
-  percent cannot be attributed to the model with certainty.
-
-## 5. Next validation steps
-
-Flights with measured atmosphere (radiosonde/weather station) and wind, weighed-in vehicles and motors, raw
-(unfiltered) IMU data including attitude, a supersonic flight, and ideally a TVC flight; a second independent code
-(OpenRocket/RASAero) on the same Cd tables; a laminar/turbulent roughness study.
+Flights with a measured atmosphere and wind, weighed vehicles and motors, raw unfiltered IMU including attitude, at least
+one supersonic flight, one sub-1-kg flight, a TVC/fin-controlled flight; reconstruct the four remaining RocketPy flights
+(Andromeda, Camoes, Juno3, Valkyrie) as an additional holdout pool; resolve the Erebus 11 burnout-speed discrepancy with
+the team's weights; a second independent code with the same Cd tables.

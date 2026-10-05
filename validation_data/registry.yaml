@@ -1,0 +1,38 @@
+# Flight registry and validation protocol (V1.1).
+#
+# SPLIT RULES (written down BEFORE any of the calibration/holdout flights was simulated):
+#   development : flights the model structure was developed or debugged against. ANY agreement on these is
+#                 IN-SAMPLE and must never be quoted as validation of the model.
+#   calibration : flights that may be used to fit physically bounded shared parameters (e.g. a drag multiplier).
+#                 A fit is accepted only with a written calibration record (validation_data/calibration_records.yaml).
+#   holdout     : flights NEVER used for development or calibration. Evaluated only with
+#                 `rocketsim validate-registry --split holdout --confirm-frozen`, which appends the result to
+#                 validation_results/holdout_log.jsonl together with a fingerprint of the physics source.
+#                 If the physics source changes after a holdout evaluation, that evaluation is reported STALE and
+#                 the flight is no longer a clean holdout for the new physics (re-running it is a re-evaluation,
+#                 labelled as such).
+#
+# SOURCE TIERS:
+#   1 : instrument-grade independent data with documented sensors and measured vehicle/environment inputs.
+#   2 : team flight computer or COTS altimeter data with team-supplied parameters (secondary source).
+#   3 : sparse or undocumented-sensor data; usable only for gross checks (apogee within its sampling limits).
+#   4 : prose, photographs or summary statistics only (no usable time series). Not used for metrics.
+#
+# NOTE on independence: ALL current flights are Tier 2/3 with parameters taken from the RocketPy example
+# repository (secondary source). No flight has measured wind, temperature profile, or verified mass properties.
+# Agreement within a few percent is therefore NOT evidence of centimetre-level model accuracy.
+protocol_version: 1
+frozen_physics_version: "1.2.1"   # 1.2.1: fin-deflection memo bug and control phase fixed after review 2; holdout results re-verified by --migrate-fingerprint
+flights:
+  - {id: bella_lui, definition: bella_lui.yaml, tier: 2, split: development, motor_class: K, mass_kg: 19.6}
+  - {id: ndrt_2020, definition: ndrt_2020.yaml, tier: 2, split: development, motor_class: L, mass_kg: 23.3}
+  - {id: prometheus, definition: prometheus.yaml, tier: 2, split: development, motor_class: M, mass_kg: 20.7}
+  - {id: genesis, definition: genesis.yaml, tier: 2, split: calibration, motor_class: L, mass_kg: 11.2}
+  - {id: astra, definition: astra.yaml, tier: 3, split: calibration, motor_class: L, mass_kg: 12.7}
+  - {id: erebus11, definition: erebus11.yaml, tier: 2, split: holdout, motor_class: K, mass_kg: 7.0}
+  - {id: cavour, definition: cavour.yaml, tier: 2, split: holdout, motor_class: L, mass_kg: 10.2}
+excluded:
+  - {id: defiance_halcyon_hedy, reason: "hybrid/liquid propulsion (thrust and mass flow not representable by a solid-motor model)"}
+  - {id: lince, reason: "two-stage mass change at a deploy event during ascent; needs events the registry does not model"}
+  - {id: andromeda_camoes_juno3_valkyrie, reason: "not yet reconstructed (candidates for a later registry version)"}
+  - {id: estes_magician_arxiv_1708_01970, reason: "Tier 4: prose-level apogee statistics only; no usable time series. Small-rocket (<1 kg) validation remains an OPEN GAP"}

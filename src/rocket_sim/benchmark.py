@@ -1,4 +1,4 @@
-"""Throughput benchmarks: single simulation, 100 / 1000 simulations, dataset generation.
+"""Throughput benchmarks: single simulation, scaling ladder (1 / 100 / 1000 / 10000 runs), dataset generation.
 
 Reports simulations/second, timesteps/second and peak memory. Results depend on the machine;
 the numbers recorded in docs/performance.md name the hardware they were measured on.
@@ -57,7 +57,9 @@ def _spec(n: int, kind: str, fidelity: int, fast: bool, workers: int, out: Path)
         config=config_to_dict(cfg),
         master_seed=1,
         runs=n,
-        shard_runs=max(1, min(50, n // 4 or 1)),
+        shard_runs=max(
+            1, min(50, -(-n // (4 * (workers or max(1, (os.cpu_count() or 2) - 1)))))
+        ),  # ~4 chunks per worker
         workers=workers,
         parameters=[
             ParamSpec(path="rocket.dry_mass_kg", dist="normal", rel_std=0.03),
@@ -69,7 +71,7 @@ def _spec(n: int, kind: str, fidelity: int, fast: bool, workers: int, out: Path)
     )
 
 
-def run_benchmarks(quick: bool = False, workers: int = 0) -> str:
+def run_benchmarks(quick: bool = False, workers: int = 0, scales: tuple[int, ...] | None = None) -> str:
     results: dict[str, Any] = {
         "machine": {
             "platform": platform.platform(),
@@ -113,33 +115,35 @@ def run_benchmarks(quick: bool = False, workers: int = 0) -> str:
     single("single: L2 FAST, dt=0.02", 2, True, 0.02, 0.1)
     del cfg
 
-    n_list = [20, 100] if quick else [100, 1000]
-    for n in n_list:
-        for fid, fast, label in ((3, False, "L3 6-DOF"), (2, True, "L2 FAST")):
-            out = Path(tempfile.mkdtemp(prefix="rsbench_"))
-            try:
-                t0 = time.perf_counter()
-                run_batch(_spec(n, "telemetry", fid, fast, workers, out), PROJECT_ROOT, out, workers=workers)
-                wall = time.perf_counter() - t0
-            finally:
-                shutil.rmtree(out, ignore_errors=True)
-            results[f"batch {n} {label}"] = {"wall_s": wall, "sims_per_s": n / wall}
-            lines.append(
-                f"batch {n:>5} sims, {label:<9} workers={workers or 'auto'}  {wall:7.1f} s  {n / wall:7.1f} sims/s"
-            )
-    nd = 100 if quick else 1000
-    out = Path(tempfile.mkdtemp(prefix="rsbench_"))
-    try:
-        t0 = time.perf_counter()
-        run_batch(_spec(nd, "windowed", 2, True, workers, out), PROJECT_ROOT, out, workers=workers)
-        wall = time.perf_counter() - t0
-        size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
-    finally:
-        shutil.rmtree(out, ignore_errors=True)
-    results["dataset windowed"] = {"wall_s": wall, "sims_per_s": nd / wall, "bytes": size}
-    lines.append(
-        f"dataset (windowed, L2 FAST) {nd:>5} sims  {wall:7.1f} s  {nd / wall:7.1f} sims/s  {size / 1e6:.1f} MB on disk"
-    )
+    # scaling ladder (V1.1): 1 / 100 / 1000 / 10000 runs. ML-style windowed datasets at L2 FAST for every rung; the
+    # heavyweight L3 telemetry batch only up to 1000 runs (10000 full-telemetry L3 runs are an overnight job).
+    ladder = scales or ((1, 20, 100) if quick else (1, 100, 1000, 10000))
+    for n in ladder:
+        out = Path(tempfile.mkdtemp(prefix="rsbench_"))
+        try:
+            t0 = time.perf_counter()
+            run_batch(_spec(n, "windowed", 2, True, workers, out), PROJECT_ROOT, out, workers=workers)
+            wall = time.perf_counter() - t0
+            size = sum(f.stat().st_size for f in out.rglob("*") if f.is_file())
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+        results[f"dataset windowed {n}"] = {"wall_s": wall, "sims_per_s": n / wall, "bytes": size}
+        lines.append(
+            f"dataset (windowed, L2 FAST) {n:>6} sims  workers={workers or 'auto'}  {wall:8.1f} s  {n / wall:7.1f} sims/s  "
+            f"{size / 1e6:8.1f} MB on disk"
+        )
+    for n in [x for x in ladder if 1 < x <= 1000]:
+        out = Path(tempfile.mkdtemp(prefix="rsbench_"))
+        try:
+            t0 = time.perf_counter()
+            run_batch(_spec(n, "telemetry", 3, False, workers, out), PROJECT_ROOT, out, workers=workers)
+            wall = time.perf_counter() - t0
+        finally:
+            shutil.rmtree(out, ignore_errors=True)
+        results[f"batch {n} L3 6-DOF"] = {"wall_s": wall, "sims_per_s": n / wall}
+        lines.append(
+            f"batch {n:>6} sims, L3 6-DOF telemetry   workers={workers or 'auto'}  {wall:8.1f} s  {n / wall:7.1f} sims/s"
+        )
     rss = _rss_mb()
     if rss is not None:
         lines.append(f"\nprocess RSS at end: {rss:.0f} MB")

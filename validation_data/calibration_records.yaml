@@ -1,0 +1,31 @@
+# Calibration records (V1.1). One entry per fitted/adjusted model parameter. A parameter is NEVER changed in the
+# default configuration without an entry here that says what changed, why, what evidence supports it and what it did.
+records:
+  - id: cal-001
+    date: 2026-10-04
+    parameter: rocket.aero.drag_scale        # multiplier on the component drag build-up
+    old_value: 1.0
+    proposed_value: 0.957
+    status: NOT ADOPTED (tested as a hypothesis on the holdout flights; see validation/holdout results)
+    why: >
+      Drag multiplier with physical bounds [0.7, 1.3] covering surface finish, rail buttons, gaps and fin edge shape
+      that a Barrowman-type build-up does not represent.
+    fit_data: [genesis, astra]       # the two CALIBRATION flights (registry.yaml); development flights not used
+    evidence:
+      joint_fit_value: 0.9573
+      apogee_error_pct_nominal: {genesis: -2.54, astra: -0.93}
+      apogee_error_pct_at_fit:  {genesis: -0.75, astra: +0.77}
+      leave_one_out: >
+        Automated criterion (held-out RMS must fall below 0.8 x nominal) passed marginally (1.50 % vs 1.91 %, i.e.
+        21 % better). With only two calibration flights, one of them Tier 3 (sparse sampling), and the astra fold
+        getting WORSE (0.93 -> 1.50 %), this is not credible evidence of generalisation.
+      development_flights_at_fit: {bella_lui: +0.90, ndrt_2020: +14.85, prometheus: -3.41}   # in-sample, informational
+    effect: >
+      The proposed change moves apogee by <= 2 percentage points; every flight's error is dominated by unmeasured
+      inputs (wind, temperature, launch angle, mass +-1-2 %), each of which moves apogee by a comparable amount.
+      The sign of the residual is not consistent across flights (ndrt_2020 over-predicts by 13 %, the rest under-
+      predict), so one global drag scale cannot explain the residuals.
+    decision: >
+      Not adopted in the default model. The primary holdout evaluation uses the NOMINAL model (drag_scale = 1.0).
+      As a pre-declared secondary test of whether the calibration generalises, the holdout flights are also
+      evaluated at 0.957 (logged with calibration_id cal-001). The outcome is reported either way.

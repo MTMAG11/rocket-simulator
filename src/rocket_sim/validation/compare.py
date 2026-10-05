@@ -122,7 +122,9 @@ def compare_flight(real: Telemetry, rec: FlightRecord, definition: dict[str, Any
     ground = float(definition.get("telemetry", {}).get("landing_altitude_m", 3.0))
     t_land_r = crossing_time(ra.t, ra.y, ground, False, start=i_r)
     land = rec.event("landing")
-    if t_land_r is not None and land is not None:
+    if not tdef.get("compare_landing", True):
+        notes.append("landing time not compared (parachute parameters of this flight are not documented)")
+    elif t_land_r is not None and land is not None:
         metrics["landing_time"] = scalar_error(float(t_land_r - tr), float(land.t - ts))
     else:
         notes.append("real record ends before landing: landing time not compared")
@@ -138,6 +140,28 @@ def compare_flight(real: Telemetry, rec: FlightRecord, definition: dict[str, Any
         metrics["altitude_ascent"] = series_error(ra.y[m_asc], sim_on_r[m_asc]).to_dict()
     if m_des.sum() > 3:
         metrics["altitude_descent"] = series_error(ra.y[m_des], sim_on_r[m_des]).to_dict()
+
+    # --- alignment diagnostic: how far is the (untuned) threshold alignment from the RMSE-optimal shift? ---------
+    if m_asc.sum() > 8:
+        scan = np.linspace(-1.5, 1.5, 121)
+        rm = np.array(
+            [
+                float(np.sqrt(np.mean((ra.y[m_asc] - _interp(t_sim + d, sa.y, ra.t[m_asc])) ** 2)))
+                for d in scan
+            ]
+        )
+        i0 = int(np.argmin(np.abs(scan)))
+        ib = int(np.argmin(rm))
+        metrics["alignment_scan"] = {
+            "best_extra_shift_s": float(scan[ib]),
+            "ascent_rmse_applied_m": float(rm[i0]),
+            "ascent_rmse_best_m": float(rm[ib]),
+            "scan_range_s": 1.5,
+        }
+        notes.append(
+            f"alignment check: ascent-altitude RMSE {rm[i0]:.1f} m at the applied shift, {rm[ib]:.1f} m at an extra "
+            f"shift of {scan[ib]:+.3f} s (the applied alignment is NOT tuned to the RMSE)"
+        )
 
     # --- velocity -----------------------------------------------------------------------------
     vname = "velocity_z" if real.has("velocity_z") else ("speed" if real.has("speed") else None)

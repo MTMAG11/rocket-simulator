@@ -2,7 +2,7 @@
 # The vehicle is the generic 29 mm example with the CG moved aft so it is statically UNSTABLE
 # (static margin about -0.7 cal); TVC must hold the nose near vertical while the motor burns:
 # measured max tilt 4.5 deg during burn closed-loop vs 178 deg (tumbling) without control, apogee
-# 302 m vs 94 m. After burnout there is no thrust authority, so the airframe tumbles (expected).
+# 305 m vs 94 m. After burnout there is no thrust authority, so the airframe tumbles (expected).
 # Larger instabilities (e.g. finless, SM -14 cal) exceed the TVC authority at 140 m/s -- try it.
 # (Illustrative, not a validated design.)
 config_version: 1

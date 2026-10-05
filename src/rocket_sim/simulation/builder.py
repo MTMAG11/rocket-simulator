@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..config import SimConfig, resolve_path
-from ..config.schema import RocketCfg
 from ..environment import (
     Atmosphere,
     CompositeWind,
@@ -39,7 +38,6 @@ from ..physics.dynamics import LaunchSetup, PointMass3DOF, RigidBody6DOF
 from ..physics.math3d import quat_from_pointing
 from ..vehicle import (
     BodyTube,
-    BuildupAero,
     ConstantAero,
     FinSet,
     MassComponent,
@@ -49,8 +47,16 @@ from ..vehicle import (
     TableAero,
     Vehicle,
 )
-from ..vehicle.aero import AerodynamicModel
+from ..vehicle.aero import (
+    AerodynamicModel,
+    BarrowmanAero,
+    EnhancedAero,
+    SimplifiedAero,
+    Table2DAero,
+)
+from ..vehicle.assembly import Assembly, ControlSurfaceSet, Section, legacy_assembly
 from ..vehicle.mass import solid_cylinder_inertia, thin_tube_inertia
+from ..vehicle.tables import load_table2d_csv
 
 
 @dataclass
@@ -90,9 +96,10 @@ def resolve_fidelity(cfg: SimConfig) -> tuple[SimConfig, FidelityFlags]:
             notes.append("fidelity 0 uses constant gravity")
             c.environment.gravity.model = "constant"
     if lvl < 5:
-        if c.estimator.type != "none":
+        if c.estimator.type not in ("none",) and not (c.estimator.type == "truth" and lvl >= 3):
             notes.append(f"fidelity {lvl}: estimator disabled")
-        c.estimator.type = "none"
+        if not (c.estimator.type == "truth" and lvl >= 3):
+            c.estimator.type = "none"
     if lvl < 3 and c.controller.type != "none":
         notes.append(f"fidelity {lvl}: controller disabled")
         c.controller.type = "none"
@@ -125,113 +132,315 @@ def build_motor(cfg: SimConfig) -> Motor:
     return motor
 
 
-def _build_aero(
-    r: RocketCfg, body: BodyTube, nose: NoseCone, fins: FinSet, motor: Motor, fast: bool
-) -> AerodynamicModel:
-    a = r.aero
-    planform = body.diameter * (body.length - nose.length + 0.5 * nose.length)
-    if a.model == "constant":
-        assert a.cd is not None
-        return ConstantAero(
-            body.diameter,
-            a.cd * a.drag_scale + a.extra_cd,
-            a.cn_alpha or 0.0,
-            a.x_cp_from_nose_m or 0.0,
-            a.crossflow_cd,
-            planform,
-            0.5 * body.length,
+def _build_assembly(cfg: SimConfig) -> Assembly:
+    """Airframe geometry: component sections if given, else the V1 nose + one body tube."""
+    r = cfg.rocket
+    f = r.fins
+    fins = FinSet(
+        f.count, f.root_chord_m, f.tip_chord_m, f.span_m, f.sweep_m, f.thickness_m, f.position_from_nose_m
+    )
+    controls = []
+    if r.control_surfaces is not None:
+        c = r.control_surfaces
+        controls.append(
+            ControlSurfaceSet(
+                c.count,
+                c.root_chord_m,
+                c.tip_chord_m,
+                c.span_m,
+                c.sweep_m,
+                c.thickness_m,
+                c.position_from_nose_m,
+                math.radians(c.roll_angle0_deg),
+                math.radians(c.max_deflection_deg),
+                math.radians(c.max_rate_deg_s),
+                c.time_constant_s,
+                c.delay_s,
+                c.mass_kg,
+            )
         )
-    if a.model == "table":
-        assert a.cd_table is not None
-        mach = [row[0] for row in a.cd_table]
-        cd = [row[1] * a.drag_scale + a.extra_cd for row in a.cd_table]
-        cdp = None
-        if a.cd_powered_table:
-            cdp = [row[1] * a.drag_scale + a.extra_cd for row in a.cd_powered_table]
-        return TableAero(
-            body.diameter,
-            mach,
-            cd,
-            a.cn_alpha or 0.0,
-            a.x_cp_from_nose_m or 0.0,
-            cdp,
-            a.crossflow_cd,
-            planform,
-            0.5 * body.length,
+    ref = r.reference_diameter_m
+    if not r.sections:
+        return (
+            legacy_assembly(
+                BodyTube(r.body_diameter_m, r.body_length_m), NoseCone(r.nose.shape, r.nose.length_m), fins
+            )
+            if not controls and ref is None
+            else _legacy_with(r, fins, controls, ref)
         )
-    model = BuildupAero(
-        body,
-        nose,
-        fins,
-        nozzle_exit_diameter=a.nozzle_exit_ratio * motor.diameter,
+    secs: list[Section] = []
+    x = 0.0
+    prev_d = 0.0
+    for i, sc in enumerate(r.sections):
+        kind = "transition" if sc.type == "boattail" else sc.type
+        if kind == "nose":
+            d_aft = sc.diameter_m if sc.diameter_m is not None else _next_diameter(r.sections, i)
+            sec = Section("nose", x, sc.length_m, 0.0, d_aft, sc.shape, sc.mass_kg, sc.cg_fraction)
+        elif kind == "body":
+            d = sc.diameter_m
+            assert d is not None
+            sec = Section("body", x, sc.length_m, d, d, "ogive", sc.mass_kg, sc.cg_fraction)
+        else:
+            d_fore = sc.fore_diameter_m if sc.fore_diameter_m is not None else prev_d
+            assert sc.aft_diameter_m is not None
+            sec = Section(
+                "transition", x, sc.length_m, d_fore, sc.aft_diameter_m, "ogive", sc.mass_kg, sc.cg_fraction
+            )
+        secs.append(sec)
+        x += sc.length_m
+        prev_d = sec.d_aft
+    try:
+        return Assembly(secs, fins, controls, ref)
+    except ConfigError as exc:
+        raise ConfigError(f"rocket.sections: {exc}") from exc
+
+
+def _next_diameter(sections, i: int) -> float:
+    for sc in sections[i + 1 :]:
+        if sc.type == "body" and sc.diameter_m:
+            return sc.diameter_m
+        if sc.type in ("transition", "boattail") and sc.fore_diameter_m:
+            return sc.fore_diameter_m
+    raise ConfigError("rocket.sections[0] (nose): give diameter_m (no following body to take it from)")
+
+
+def _legacy_with(r, fins, controls, ref) -> Assembly:
+    base = legacy_assembly(
+        BodyTube(r.body_diameter_m, r.body_length_m), NoseCone(r.nose.shape, r.nose.length_m), fins
+    )
+    return Assembly(list(base.sections), fins, controls, ref)
+
+
+def _table_aero_from(
+    model: BarrowmanAero, mach: list[float], cd: list[float], cdp, a, planform=True
+) -> TableAero:
+    """Lookup-table drag with the geometry-derived stability of ``model``."""
+    c0 = model.coefficients(0.3, 1e7, False)
+    return TableAero(
+        model.ref_diameter,
+        mach,
+        cd,
+        c0.cn_alpha,
+        c0.x_cp,
+        cdp,
+        a.crossflow_cd,
+        model.planform_area,
+        model.x_crossflow,
+        model.damping_surfaces,
+        model.roll_damping_cn,
+        model.roll_damping_radius,
+        model.control_fins,
+    )
+
+
+def _build_aero(cfg: SimConfig, asm: Assembly, motor: Motor, fast: bool) -> AerodynamicModel:
+    a = cfg.rocket.aero
+    noz = a.nozzle_exit_ratio * motor.diameter
+    if noz >= asm.base_diameter:
+        raise ConfigError(
+            f"motor {motor.designation} nozzle (~{noz * 1000:.0f} mm) does not fit the base diameter "
+            f"{asm.base_diameter * 1000:.0f} mm"
+        )
+    common = dict(
         surface_roughness=a.surface_roughness_m,
         crossflow_cd=a.crossflow_cd,
         extra_cd=a.extra_cd,
         drag_scale=a.drag_scale,
     )
+    geo = BarrowmanAero(asm, noz, **common)  # geometry-derived stability for every model
+    if a.model == "constant":
+        assert a.cd is not None
+        cn = a.cn_alpha if a.cn_alpha is not None else geo.cn_alpha_total
+        xcp = a.x_cp_from_nose_m if a.x_cp_from_nose_m is not None else geo.x_cp_subsonic
+        m = ConstantAero(
+            asm.ref_diameter,
+            a.cd * a.drag_scale + a.extra_cd,
+            cn,
+            xcp,
+            a.crossflow_cd,
+            geo.planform_area,
+            geo.x_crossflow,
+        )
+        if a.cn_alpha is None:
+            m.damping_surfaces, m.roll_damping_cn, m.roll_damping_radius = (
+                geo.damping_surfaces,
+                geo.roll_damping_cn,
+                geo.roll_damping_radius,
+            )
+        m.control_fins = geo.control_fins
+        return m
+    if a.model == "table":
+        assert a.cd_table is not None
+        mach = [row[0] for row in a.cd_table]
+        cd = [row[1] * a.drag_scale + a.extra_cd for row in a.cd_table]
+        cdp = (
+            [row[1] * a.drag_scale + a.extra_cd for row in a.cd_powered_table] if a.cd_powered_table else None
+        )
+        if a.cn_alpha is not None or a.x_cp_from_nose_m is not None:
+            return TableAero(
+                asm.ref_diameter,
+                mach,
+                cd,
+                a.cn_alpha if a.cn_alpha is not None else geo.cn_alpha_total,
+                a.x_cp_from_nose_m if a.x_cp_from_nose_m is not None else geo.x_cp_subsonic,
+                cdp,
+                a.crossflow_cd,
+                geo.planform_area,
+                geo.x_crossflow,
+                geo.damping_surfaces,
+                geo.roll_damping_cn,
+                geo.roll_damping_radius,
+                geo.control_fins,
+            )
+        return _table_aero_from(geo, mach, cd, cdp, a)
+    if a.model == "table2d":
+        assert a.table2d_file is not None
+        t = load_table2d_csv(resolve_path(cfg, a.table2d_file))
+        m2 = Table2DAero(
+            asm.ref_diameter,
+            t["mach"],
+            t["alpha"],
+            t["cd"],
+            t["cl"],
+            t["cm"],
+            a.x_cm_ref_from_nose_m if a.x_cm_ref_from_nose_m is not None else geo.x_cp_subsonic,
+            geo.x_cp_subsonic,
+            geo.damping_surfaces,
+            geo.roll_damping_cn,
+            geo.roll_damping_radius,
+        )
+        m2.control_fins = geo.control_fins
+        return m2
+    if a.model == "simplified":
+        assert a.cd is not None
+        model: BarrowmanAero = SimplifiedAero(asm, a.cd, noz, **common)
+    elif a.model == "enhanced":
+        model = EnhancedAero(asm, noz, a.stall_angle_deg, **common)
+    else:  # barrowman / buildup
+        model = geo
     if fast:
         # Mach-dependent Cd table evaluated once at a fixed representative air state (rho = 1.0 kg/m^3,
         # T = 270 K): no Reynolds/altitude dependence at run time, so evaluation is a cheap lookup.
         machs = [round(0.05 * i, 2) for i in range(0, 61)]
         cds = []
-        for m in machs:
-            v = max(m, 0.02) * math.sqrt(1.4 * 287.05 * 270.0)
-            cds.append(model.coefficients(m, 1.0 * v * body.length / 1.75e-5, False).cd0)
-        c0 = model.coefficients(0.3, 1e7, False)
-        return TableAero(
-            body.diameter,
-            machs,
-            cds,
-            c0.cn_alpha,
-            c0.x_cp,
-            None,
-            a.crossflow_cd,
-            model.planform_area,
-            model.x_crossflow,
-        )
+        for m_ in machs:
+            v = max(m_, 0.02) * math.sqrt(1.4 * 287.05 * 270.0)
+            cds.append(model.coefficients(m_, 1.0 * v * asm.length / 1.75e-5, False).cd0)
+        return _table_aero_from(model, machs, cds, None, a)
     return model
+
+
+def _fin_set_inertia(mass: float, rho: float) -> tuple[float, float]:
+    """(Ixx, Iyy) of a symmetric fin set of total mass m with centroid radius rho (thin plates)."""
+    return mass * rho * rho, 0.5 * mass * rho * rho
 
 
 def build_vehicle(cfg: SimConfig, motor: Motor | None = None, fast: bool | None = None) -> Vehicle:
     r = cfg.rocket
     motor = motor if motor is not None else build_motor(cfg)
     fast = cfg.fast if fast is None else fast
-    body = BodyTube(r.body_diameter_m, r.body_length_m)
-    nose = NoseCone(r.nose.shape, r.nose.length_m)
-    f = r.fins
-    fins = FinSet(
-        f.count, f.root_chord_m, f.tip_chord_m, f.span_m, f.sweep_m, f.thickness_m, f.position_from_nose_m
-    )
-    nozzle_x = r.motor_aft_from_nose_m if r.motor_aft_from_nose_m is not None else r.body_length_m
-    if motor.diameter > body.diameter + 1e-9:
+    asm = _build_assembly(cfg)
+    length = asm.length
+    body = BodyTube(asm.ref_diameter, length)
+    notes: list[str] = []
+    nozzle_x = r.motor_aft_from_nose_m if r.motor_aft_from_nose_m is not None else length
+    if motor.diameter > asm.base_diameter + 1e-9 and motor.diameter > asm.ref_diameter + 1e-9:
         raise ConfigError(
             f"motor {motor.designation} (diameter {motor.diameter * 1000:.0f} mm) does not fit in a "
-            f"{body.diameter * 1000:.0f} mm body"
+            f"{asm.ref_diameter * 1000:.0f} mm body"
         )
+    if nozzle_x > length + 1e-9:
+        raise ConfigError(f"motor_aft_from_nose_m={nozzle_x} m is beyond the airframe length {length} m")
     if motor.length > nozzle_x:
         raise ConfigError(
             f"motor length {motor.length * 1000:.0f} mm exceeds motor_aft_from_nose_m={nozzle_x} m"
         )
     mx = nozzle_x - 0.5 * motor.length  # motor centre
-    if r.inertia is not None:
-        ixx, iyy = r.inertia.ixx_kgm2, r.inertia.iyy_kgm2
+    comps: list[MassComponent] = []
+    if r.sections:
+        for sec in asm.sections:
+            if sec.mass > 0:
+                ixx, iyy = thin_tube_inertia(sec.mass, sec.mean_radius, sec.length)
+                comps.append(MassComponent(sec.kind, sec.mass, sec.x_cg, ixx, iyy))
+                notes.append(f"inertia of the {sec.kind} section is a thin-shell ESTIMATE")
+        if r.fins.mass_kg > 0 and r.fins.count:
+            f_ = asm.fins
+            xf = f_.leading_edge_from_nose + (
+                f_.sweep / 3.0 * (f_.root_chord + 2 * f_.tip_chord) / (f_.root_chord + f_.tip_chord)
+                + 0.5 * f_.mean_chord
+            )
+            rho = asm.local_radius(f_.leading_edge_from_nose) + 0.5 * f_.span
+            ixx, iyy = _fin_set_inertia(r.fins.mass_kg, rho)
+            comps.append(MassComponent("fins", r.fins.mass_kg, xf, ixx, iyy))
+        for cs in asm.controls:
+            if cs.mass > 0:
+                rho = asm.local_radius(cs.leading_edge_from_nose) + 0.5 * cs.span
+                ixx, iyy = _fin_set_inertia(cs.mass, rho)
+                comps.append(
+                    MassComponent(
+                        "control_surfaces", cs.mass, cs.leading_edge_from_nose + 0.5 * cs.root_chord, ixx, iyy
+                    )
+                )
+        if r.dry_mass_kg:
+            assert r.cg_from_nose_m is not None
+            if r.inertia is not None:
+                ixx, iyy = r.inertia.ixx_kgm2, r.inertia.iyy_kgm2
+            else:
+                ixx, iyy = thin_tube_inertia(r.dry_mass_kg, 0.5 * asm.ref_diameter, length)
+                notes.append("inertia of the lumped airframe mass is a thin-tube ESTIMATE")
+            comps.append(MassComponent("airframe", r.dry_mass_kg, r.cg_from_nose_m, ixx, iyy))
     else:
-        ixx, iyy = thin_tube_inertia(r.dry_mass_kg, body.radius, body.length)
-    comps = [MassComponent("airframe", r.dry_mass_kg, r.cg_from_nose_m, ixx, iyy)]
+        assert r.dry_mass_kg is not None and r.cg_from_nose_m is not None
+        if r.inertia is not None:
+            ixx, iyy = r.inertia.ixx_kgm2, r.inertia.iyy_kgm2
+        else:
+            ixx, iyy = thin_tube_inertia(r.dry_mass_kg, 0.5 * body.diameter, body.length)
+            notes.append("inertia of the lumped airframe mass is a thin-tube ESTIMATE")
+        comps.append(MassComponent("airframe", r.dry_mass_kg, r.cg_from_nose_m, ixx, iyy))
+        if r.fins.mass_kg > 0 and r.fins.count:
+            f_ = asm.fins
+            xf = f_.leading_edge_from_nose + 0.5 * f_.mean_chord
+            ixx, iyy = _fin_set_inertia(r.fins.mass_kg, asm.local_radius(xf) + 0.5 * f_.span)
+            comps.append(MassComponent("fins", r.fins.mass_kg, xf, ixx, iyy))
+        for cs in asm.controls:
+            if cs.mass > 0:
+                rho = asm.local_radius(cs.leading_edge_from_nose) + 0.5 * cs.span
+                ixx, iyy = _fin_set_inertia(cs.mass, rho)
+                comps.append(
+                    MassComponent(
+                        "control_surfaces", cs.mass, cs.leading_edge_from_nose + 0.5 * cs.root_chord, ixx, iyy
+                    )
+                )
     if r.payload is not None and r.payload.mass_kg > 0:
         comps.append(MassComponent("payload", r.payload.mass_kg, r.payload.position_from_nose_m))
+    for item in r.masses:
+        if item.mass_kg > 0:
+            comps.append(
+                MassComponent(
+                    item.name,
+                    item.mass_kg,
+                    item.position_from_nose_m,
+                    item.ixx_kgm2,
+                    item.iyy_kgm2,
+                    item.offset_y_m,
+                    item.offset_z_m,
+                )
+            )
     cixx, ciyy = thin_tube_inertia(motor.casing_mass, 0.5 * motor.diameter, motor.length)
     comps.append(MassComponent("motor_casing", motor.casing_mass, mx, cixx, ciyy))
     mass_model = MassModel(comps, mx, 0.5 * motor.diameter * 0.9, motor.length * 0.9)
-    aero = _build_aero(r, body, nose, fins, motor, fast)
+    aero = _build_aero(cfg, asm, motor, fast)
     chutes = []
+    nose_len = asm.nose.length
     for p in r.parachutes:
-        attach = p.attach_from_nose_m if p.attach_from_nose_m is not None else r.nose.length_m
+        attach = p.attach_from_nose_m if p.attach_from_nose_m is not None else nose_len
         chutes.append(
             Parachute(p.cd, p.diameter_m, p.trigger, p.altitude_m, p.delay_s, p.inflation_time_s, attach)
         )
     mis = (math.radians(cfg.motor.misalignment_deg[0]), math.radians(cfg.motor.misalignment_deg[1]))
-    return Vehicle(r.name, body, aero, mass_model, motor, nozzle_x, mis, cfg.motor.ignition_delay_s, chutes)
+    return Vehicle(
+        r.name, body, aero, mass_model, motor, nozzle_x, mis, cfg.motor.ignition_delay_s, chutes, asm, notes
+    )
 
 
 def build_wind(cfg: SimConfig, seed: np.random.SeedSequence) -> Wind:
@@ -300,12 +509,6 @@ def build_dynamics(cfg: SimConfig, flags: FidelityFlags, vehicle: Vehicle, env: 
     )
 
 
-def estimate_inertia_note(r: RocketCfg) -> str | None:
-    if r.inertia is None:
-        return "inertia not provided: thin-tube estimate used (provide measured/CAD values)"
-    return None
-
-
 __all__ = [
     "FidelityFlags",
     "build_dynamics",
@@ -314,7 +517,6 @@ __all__ = [
     "build_motor",
     "build_vehicle",
     "build_wind",
-    "estimate_inertia_note",
     "resolve_fidelity",
     "solid_cylinder_inertia",
 ]

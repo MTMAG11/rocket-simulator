@@ -1,4 +1,4 @@
-# Telemetry schema v1.0.0
+# Telemetry schema v1.1.0
 
 | column | unit | dtype | group | min fidelity | description |
 |---|---|---|---|---|---|
@@ -59,6 +59,17 @@
 | `tvc_cmd_z` | rad | float64 | control | 3 | commanded thrust deflection about z_B |
 | `tvc_y` | rad | float64 | control | 3 | actual thrust deflection about y_B |
 | `tvc_z` | rad | float64 | control | 3 | actual thrust deflection about z_B |
+| `fin_cmd_pitch` | rad | float64 | control_surfaces | 3 | commanded pitch deflection-equivalent (control surfaces) |
+| `fin_cmd_yaw` | rad | float64 | control_surfaces | 3 | commanded yaw deflection-equivalent (control surfaces) |
+| `fin_cmd_roll` | rad | float64 | control_surfaces | 3 | commanded roll deflection-equivalent (control surfaces) |
+| `fin_0` | rad | float64 | control_surfaces | 3 | actual deflection of control fin 0 |
+| `fin_1` | rad | float64 | control_surfaces | 3 | actual deflection of control fin 1 |
+| `fin_2` | rad | float64 | control_surfaces | 3 | actual deflection of control fin 2 |
+| `fin_3` | rad | float64 | control_surfaces | 3 | actual deflection of control fin 3 |
+| `fin_4` | rad | float64 | control_surfaces | 3 | actual deflection of control fin 4 |
+| `fin_5` | rad | float64 | control_surfaces | 3 | actual deflection of control fin 5 |
+| `fin_6` | rad | float64 | control_surfaces | 3 | actual deflection of control fin 6 |
+| `fin_7` | rad | float64 | control_surfaces | 3 | actual deflection of control fin 7 |
 | `meas_accel_x` | m/s^2 | float64 | sensors | 4 | accelerometer specific force, body (x) |
 | `meas_accel_y` | m/s^2 | float64 | sensors | 4 | accelerometer specific force, body (y) |
 | `meas_accel_z` | m/s^2 | float64 | sensors | 4 | accelerometer specific force, body (z) |
@@ -78,15 +89,15 @@
 | `meas_mag_x` | T | float64 | sensors | 4 | magnetometer field, body (x) |
 | `meas_mag_y` | T | float64 | sensors | 4 | magnetometer field, body (y) |
 | `meas_mag_z` | T | float64 | sensors | 4 | magnetometer field, body (z) |
-| `est_valid` | - | int8 | estimator | 5 | 1 when the estimator output is valid (aligned) |
-| `launch_detected` | - | int8 | estimator | 5 | 1 once the flight computer has detected launch |
-| `est_pos_x` | m | float64 | estimator | 5 | estimated position, launch frame (x) |
-| `est_pos_y` | m | float64 | estimator | 5 | estimated position, launch frame (y) |
-| `est_pos_z` | m | float64 | estimator | 5 | estimated position, launch frame (z) |
-| `est_vel_x` | m/s | float64 | estimator | 5 | estimated velocity, launch frame (x) |
-| `est_vel_y` | m/s | float64 | estimator | 5 | estimated velocity, launch frame (y) |
-| `est_vel_z` | m/s | float64 | estimator | 5 | estimated velocity, launch frame (z) |
-| `est_quat_w` | - | float64 | estimator | 5 | estimated attitude quaternion (w) |
-| `est_quat_x` | - | float64 | estimator | 5 | estimated attitude quaternion (x) |
-| `est_quat_y` | - | float64 | estimator | 5 | estimated attitude quaternion (y) |
-| `est_quat_z` | - | float64 | estimator | 5 | estimated attitude quaternion (z) |
+| `est_valid` | - | int8 | estimator | 3 | 1 when the estimator output is valid (aligned) |
+| `launch_detected` | - | int8 | estimator | 3 | 1 once the flight computer has detected launch |
+| `est_pos_x` | m | float64 | estimator | 3 | estimated position, launch frame (x) |
+| `est_pos_y` | m | float64 | estimator | 3 | estimated position, launch frame (y) |
+| `est_pos_z` | m | float64 | estimator | 3 | estimated position, launch frame (z) |
+| `est_vel_x` | m/s | float64 | estimator | 3 | estimated velocity, launch frame (x) |
+| `est_vel_y` | m/s | float64 | estimator | 3 | estimated velocity, launch frame (y) |
+| `est_vel_z` | m/s | float64 | estimator | 3 | estimated velocity, launch frame (z) |
+| `est_quat_w` | - | float64 | estimator | 3 | estimated attitude quaternion (w) |
+| `est_quat_x` | - | float64 | estimator | 3 | estimated attitude quaternion (x) |
+| `est_quat_y` | - | float64 | estimator | 3 | estimated attitude quaternion (y) |
+| `est_quat_z` | - | float64 | estimator | 3 | estimated attitude quaternion (z) |

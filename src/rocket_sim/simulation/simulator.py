@@ -30,10 +30,12 @@ import numpy as np
 from ..config import SimConfig, config_hash, config_to_dict, resolve_path
 from ..constants import G0
 from ..control import Command, ControlInput, Controller, TVCActuator, build_controller
+from ..control.actuators import ActuatorBank
+from ..control.mixer import FinMixer
 from ..data.schema import columns_for
 from ..environment import ISAAtmosphere
 from ..errors import SimulationError
-from ..estimation import EstimatedState, build_estimator
+from ..estimation import EstimatedState, TruthEstimator, TruthState, build_estimator
 from ..physics.integrators import STEPPERS, refine_event
 from ..physics.math3d import quat_to_euler
 from ..sensors import SensorSuite
@@ -94,17 +96,33 @@ class Simulation:
         self.sensors = SensorSuite(c.sensors, kids[1:6]) if self.has_sensors else None
         self.estimator = (
             build_estimator(c.estimator, c.sensors, self.env.gravity, self.env.site_elevation)
-            if self.has_sensors and c.estimator.type != "none"
+            if (self.has_sensors and c.estimator.type != "none")
+            or (c.estimator.type == "truth" and self.flags.dof == 6)
             else None
         )
         self.controller: Controller | None = None
         if self.flags.dof == 6 and (controller is not None or c.controller.type != "none"):
             self.controller = controller or build_controller(c.controller.type, c.controller.params)
         self.actuator = TVCActuator(c.tvc)
+        self.fin_actuator: ActuatorBank | None = None
+        self.mixer: FinMixer | None = None
+        cfins = self.vehicle.aero.control_fins
+        if cfins and self.flags.dof == 6:
+            self.fin_actuator = ActuatorBank(
+                [f.max_deflection for f in cfins],
+                [f.max_rate for f in cfins],
+                [f.time_constant for f in cfins],
+                [f.delay for f in cfins],
+            )
+            self.mixer = FinMixer(cfins, self.vehicle.mass_props(0.0).x_cg)
         self.phases = PhaseMachine()
         self.warnings: list[str] = list(self.motor.sanity_warnings())
-        if c.rocket.inertia is None and self.flags.dof == 6:
-            self.warnings.append("inertia not provided: thin-tube estimate used")
+        if self.flags.dof == 6:
+            self.warnings.extend(
+                f"{n} (provide measured/CAD values)"
+                for n in dict.fromkeys(self.vehicle.notes)
+                if "ESTIMATE" in n
+            )
         if self.flags.dof == 6:
             sm = self.vehicle.static_margin(0.0)
             if sm < 1.0:
@@ -113,6 +131,33 @@ class Simulation:
                 self.warnings.append("vehicle is statically UNSTABLE at launch (cp ahead of cg)")
 
     # ------------------------------------------------------------------------------------------
+    def _fin_authority(self):
+        """Command-per-angular-acceleration for control surfaces, from the (estimated) dynamic pressure.
+
+        The flight computer is assumed to know the vehicle's mass properties and the standard atmosphere;
+        it does NOT know the wind, so dynamic pressure comes from the estimated ground-relative speed."""
+        veh, mixer = self.vehicle, self.mixer
+        assert mixer is not None
+        s_ref = veh.aero.ref_area
+        isa = ISAAtmosphere()
+        site = self.env.site_elevation
+        vref = 15.0  # below this speed the surfaces have no useful authority
+
+        def authority(t: float, inp) -> tuple[float, float, float] | None:
+            vx, vy, vz = inp.velocity
+            speed = math.sqrt(vx * vx + vy * vy + vz * vz)
+            if speed < vref:
+                return None
+            rho = isa.at(site + inp.position[2]).density
+            qs = 0.5 * rho * speed * speed * s_ref
+            mp = veh.mass_props(t)
+            gy, gz, gx = mixer.gain(1), mixer.gain(2), mixer.gain(0)
+            if min(abs(gy), abs(gz)) < 1e-12:
+                return None
+            return (mp.iyy / (qs * gy), mp.iyy / (qs * gz), (mp.ixx / (qs * gx)) if abs(gx) > 1e-12 else 0.0)
+
+        return authority
+
     def _controller_authority(self):
         """Gimbal-per-angular-acceleration schedule I_yy / (T |lever|) known to the controller.
 
@@ -148,7 +193,8 @@ class Simulation:
         t_burn = veh.burnout_time
         site = env.site_elevation
 
-        columns = [c.name for c in columns_for(cfg.fidelity, self.estimator is not None)]
+        n_fins = len(self.vehicle.aero.control_fins) if is6 else 0
+        columns = [c.name for c in columns_for(cfg.fidelity, self.estimator is not None, n_fins)]
         rec = Recorder(columns)
         events: list[FlightEvent] = []
 
@@ -169,6 +215,7 @@ class Simulation:
         row_counter = 0
         n_rows = 0
         last_est = EstimatedState()
+        last_fin_cmd = (0.0, 0.0, 0.0)
         latest_readings = None
         isa = ISAAtmosphere()
         p_ref_baro: float | None = None
@@ -182,6 +229,7 @@ class Simulation:
             self.controller.reset(
                 {
                     "authority": self._controller_authority(),
+                    "fin_authority": self._fin_authority() if self.mixer is not None else None,
                     "launch_axis": dyn.rail_axis,
                 }
             )
@@ -265,6 +313,10 @@ class Simulation:
             if cfg.fidelity >= 3:
                 row["tvc_cmd_y"], row["tvc_cmd_z"] = self.actuator.cmd
                 row["tvc_y"], row["tvc_z"] = self.actuator.state
+            if self.fin_actuator is not None:
+                row["fin_cmd_roll"], row["fin_cmd_pitch"], row["fin_cmd_yaw"] = last_fin_cmd
+                for i_, d_ in enumerate(self.fin_actuator.state):
+                    row[f"fin_{i_}"] = d_
             if self.has_sensors:
                 row.update(sensor_cols)
             if self.estimator is not None:
@@ -330,8 +382,17 @@ class Simulation:
                     "meas_mag_y": rd.mag[1],
                     "meas_mag_z": rd.mag[2],
                 }
-                if self.estimator is not None:
-                    last_est = self.estimator.update(t, rd)
+            if self.estimator is not None:
+                truth = None
+                if isinstance(self.estimator, TruthEstimator):
+                    truth = TruthState(
+                        dyn.position(y),
+                        dyn.velocity(y),
+                        dyn.quaternion(y, t),
+                        dyn.omega(y),
+                        t_ign if t >= t_ign else None,
+                    )
+                last_est = self.estimator.update(t, latest_readings, truth)
             if self.controller is not None and t >= next_ctrl - _EPS:
                 if use_truth_ctrl:
                     ts = (t - t_ign) if t >= t_ign else None
@@ -363,6 +424,11 @@ class Simulation:
                 if not (math.isfinite(cmd.tvc_y) and math.isfinite(cmd.tvc_z)):
                     raise SimulationError(f"controller returned a non-finite command at t={t:.3f}")
                 self.actuator.command(t, Command(cmd.tvc_y, cmd.tvc_z))
+                if self.fin_actuator is not None and self.mixer is not None:
+                    if not all(math.isfinite(v) for v in (cmd.fin_roll, cmd.fin_pitch, cmd.fin_yaw)):
+                        raise SimulationError(f"controller returned a non-finite fin command at t={t:.3f}")
+                    self.fin_actuator.command(t, self.mixer.mix(cmd))
+                    last_fin_cmd = (cmd.fin_roll, cmd.fin_pitch, cmd.fin_yaw)
                 while next_ctrl <= t + _EPS:
                     next_ctrl += ctrl_period
 
@@ -428,6 +494,8 @@ class Simulation:
 
             if is6:
                 dyn.controls.tvc_y, dyn.controls.tvc_z = self.actuator.state
+                if self.fin_actuator is not None:
+                    dyn.controls.fin = list(self.fin_actuator.state)  # ACTUAL fin positions
             f = dyn.derivative
             y_new = dyn.post_step(step(f, t, y, h))
             n_steps += 1
@@ -484,6 +552,13 @@ class Simulation:
             t, y = t_new, y_new
             if is6:
                 self.actuator.step(prev_t, t - prev_t)
+                if self.fin_actuator is not None:
+                    self.fin_actuator.step(prev_t, t - prev_t)
+                # controls seen by the force evaluation at the start of the next loop (and by the logged row) are the
+                # actuator state AT THIS time, not the previous step's
+                dyn.controls.tvc_y, dyn.controls.tvc_z = self.actuator.state
+                if self.fin_actuator is not None:
+                    dyn.controls.fin = list(self.fin_actuator.state)
 
             if name == "rail_exit":
                 dyn.on_rail = False

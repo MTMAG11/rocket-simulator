@@ -71,7 +71,9 @@ Features are declared in YAML: `{column: meas_baro_altitude}`, `{column: vel_z, 
 `{derived: time_since_ignition}` or `{derived: time_since_launch_detected}` (needs an estimator). Targets are plain truth
 columns. `window.target`: `current` (label at window end), `future` (label `horizon_s` later), `trajectory` (next K
 samples, `Y (N, K, L)`). Flights are trimmed to liftoff..landing (`trim: flight`) and resampled to a uniform grid
-(`sample_dt_s`). Nothing in the simulator is specific to a network architecture; choosing deployable (non-truth) inputs
+(`sample_dt_s`). **Every input column is zero-order held** (the value of the latest native sample at or before the grid time;
+V1.1: truth inputs used to be linearly interpolated, which reads one native sample *after* the grid time - a small non-causal
+leak). Targets are labels and are interpolated. Nothing in the simulator is specific to a network architecture; choosing deployable (non-truth) inputs
 is the user's responsibility and is documented in the manifest (`feature_schema`, `label_schema`).
 
 Windowed shard (`.npz`): `x`, `y`, `t_end`, `run_ref` (index into `simulation_ids`), `simulation_ids`.
@@ -81,7 +83,10 @@ Windowed shard (`.npz`): `x`, `y`, `t_end`, `run_ref` (index into `simulation_id
 dataset id (`<name>-<spec hash>`), creation time, simulator/physics/schema/config versions, fidelity level and fast flag,
 base config (+hash), full spec, counts (requested / accepted / rejected / samples / per split), seed information and the
 derivation rule, leakage checks, feature and label schemas, window definition, telemetry columns, quality limits, the
-list of shard files with SHA-256, worker count.
+list of shard files with SHA-256, worker count. V1.1 additions: `dataset_version`, `statistics` (per-split parameter and
+result statistics), `sampler_checks` (KS tests of sampled vs declared marginals), `leakage_checks` (near-duplicates, run
+disjointness, resampling rule), `statistics_report` (`dataset_report.md`), and per-row `dataset_id`/`dataset_version`/`config_hash`
+in `runs.parquet` for traceability.
 
 ## Inspecting datasets without loading telemetry
 
@@ -102,7 +107,69 @@ Y = np.concatenate([z["y"] for z in train])   # (N, 1)
 ## Limitations to keep in mind
 
 * Fast-mode data (fidelity <= 2) lack attitude dynamics and sensors; use fidelity >= 4 for estimator/controller learning.
-* The simulator is validated (docs/validation.md) against three amateur flights; sim-to-real gaps (aerodynamics, sensor
+* The simulator was compared (docs/validation.md) with seven amateur flights (no flight below ~7 kg); sim-to-real gaps (aerodynamics, sensor
   noise structure, vibration, wind spatial structure) are real. Domain randomisation over the relevant parameters is
   provided precisely because the nominal model is only accurate to ~10 % in apogee for the vehicles validated (and unvalidated beyond that).
 * Sensor defaults are representative orders of magnitude, not a datasheet.
+
+
+## V1.1: domain randomisation
+
+`configs/domain_randomization.yaml` is the reference spec. Rules (all stored verbatim in the manifest's `spec`):
+
+1. **Explicit distributions only**: `normal`, `truncnormal`, `uniform`, `lognormal`, `choice`, or `linked`. Nothing is
+   randomised implicitly; `rocketsim generate-dataset` fails if a path does not exist.
+2. **Physically linked quantities are not sampled independently.**
+   * `dist: linked` - `value = base * (sampled_ref / base_ref) ** exponent * (1 + N(0, rel_std))`; e.g. inertia follows the
+     sampled mass (`ref: rocket.dry_mass_kg`, exponent 1). The ref must appear earlier in the list.
+   * `correlations:` - a Gaussian copula over a group of continuous parameters (`paths`, symmetric positive-definite
+     `matrix`). Each marginal is *exactly* the declared distribution (verified by KS tests in the tests and per dataset); only
+     the dependence changes. Example: temperature offset vs sea-level pressure (-0.4), mean wind vs turbulence (+0.7).
+     Parameters outside groups draw exactly as before, so existing specs reproduce bit-for-bit.
+3. **Per-flight sensor imperfections**: noise, bias, misalignment, GPS dropout probability (Bernoulli per fix), GPS start-up
+   delay, GPS velocity noise - all ordinary parameters (`sensors.*`).
+4. **Splits are whole flights with disjoint seed namespaces.** A `test` split can use a *shifted* distribution
+   (the example uses stronger wind, heavier vehicles and lower launch angles than training). The dataset report records how far
+   the splits are (median nearest-neighbour distance train->test vs train->train).
+
+## V1.1: leakage tests and quality gates
+
+* *Trajectory leakage*: windows never span two flights; ids and seeds appear in exactly one split (`check_run_disjoint`,
+  stored in the manifest).
+* *Near-duplicate leakage*: `near_duplicate_report` standardises the varying numeric parameters on the pooled std and
+  reports, per non-train split, the nearest-neighbour distance to the training runs; a run is a near-duplicate if it is closer
+  than `max(eps, 0.05 x the median within-train nearest-neighbour distance)` (relative, so it works in 20 dimensions) and raises a
+  manifest warning. The V1 check only caught bit-identical parameter vectors; the tests show 40 of 40 copies perturbed by
+  0.02 sigma in 20-D are found and 0 of 40 independent draws are flagged. It detects *copying*, not general similarity.
+* *Temporal leakage*: `temporal_causality_check` corrupts everything after many cut times and verifies that every resampled
+  input row (and, for windowed datasets, every window ending before the cut) is bit-identical (tested on truth inputs, measured inputs, lags and the derived clock feature;
+  with a negative control: switching the pipeline to interpolation makes the detector fire).
+* *Label leakage* is the user's choice (truth vs measured inputs) and is recorded, not policed.
+* *Sampler correctness*: every declared normal/uniform/lognormal marginal is tested against its CDF (KS, p < 1e-3 flags a
+  warning) once a split has >= 200 accepted runs.
+* *Quality gates* (`data/quality.py`, tested per failure class): non-finite values, speed/altitude/rate bounds, quaternion
+  drift, status, missing columns, missing landing, apogee floor. Rejected runs are written to `rejected.jsonl` with the
+  seed and the parameter draw; a rejection rate above 5 % raises a bias warning.
+
+## V1.1: statistics report
+
+Every dataset directory contains `dataset_report.md`: per-split acceptance, parameter statistics (mean, std, min, p05, p95,
+max), result statistics (apogee, max speed/acceleration, ...), the leakage report, the KS checks and the rejection reasons.
+
+## V1.1: experiments (versioned, reproducible)
+
+```bash
+rocketsim experiment configs/experiment_example.yaml     # writes experiments/<name>-<spec hash>-<UTC stamp>/
+rocketsim experiment --list
+rocketsim experiment --verify experiments/<id>           # regenerates and compares every shard SHA-256
+```
+
+`experiment.json` stores the experiment id, date, git commit and dirty flag, simulator/physics/schema/config/dataset versions,
+master seed, spec hash, base-config hash, dataset id, environment (Python/NumPy/PyArrow), command line, counts, warnings, and the
+SHA-256 of the manifest and every shard; the spec is copied next to it. Same spec hash => bit-identical data (tested:
+`--verify` reproduces all shards; a different seed changes hash and shards).
+
+## V1.1: benchmarks
+
+`rocketsim benchmark` measures single runs and a scaling ladder of **1 / 100 / 1000 / 10000** simulations (`--scales` to change).
+Numbers and the machine they were measured on are in [performance.md](performance.md).

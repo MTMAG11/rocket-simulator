@@ -1,15 +1,16 @@
-"""Thrust-vector-control actuator model (two axes, independent).
+"""Reusable actuator model for TVC gimbals and aerodynamic control surfaces.
 
-Command path:  controller -> clip to +-max_angle -> delay -> first-order lag -> rate limit ->
-angle limit -> actual gimbal angle (what the physics sees).
+    command --(saturate)--> --(transport delay)--> --(first-order lag)--> --(rate limit)--> --(angle limit)--> state
 
-Parameters (ActuatorCfg): max_angle_deg, max_rate_deg_s, time_constant_s (0 = ideal lag-free),
-delay_s (pure transport delay). The lag is integrated exactly per step (stable for any step
-size), rate limiting is applied to the resulting increment.
+The PHYSICAL actuator state (``state``) is what the physics engine applies; the commanded value is only an
+input. Delay is the communication/processing latency before the actuator sees the command; the rate limit and
+lag are the actuator's own dynamics (so the actuator slews toward the *delayed* command). The lag is
+integrated exactly per step (stable for any step size); the rate limit is applied to the resulting increment.
 
-Not modelled: backlash, deadband, quantisation, load-dependent torque limits, actuator
-dynamics beyond first order. Aerodynamic control surfaces (fins/canards) are not yet
-implemented; the Command type is the extension point.
+``ActuatorBank`` holds several independent channels with per-channel limits (N fins); ``TVCActuator`` is the
+two-channel gimbal built on it.
+
+Not modelled: backlash, deadband, quantisation, load-dependent torque limits, position-dependent rate.
 """
 
 from __future__ import annotations
@@ -23,38 +24,63 @@ from ..config.schema import ActuatorCfg
 
 @dataclass
 class Command:
-    """Controller output. Angles in radians: thrust deflection about body y and z."""
+    """Controller output (radians). TVC: thrust deflection about body y and z. Control surfaces: pitch/yaw/roll
+    deflection-equivalent commands that the vehicle's mixer converts to individual fin deflections."""
 
     tvc_y: float = 0.0
     tvc_z: float = 0.0
+    fin_pitch: float = 0.0  # moment about +y_B
+    fin_yaw: float = 0.0  # moment about +z_B
+    fin_roll: float = 0.0  # moment about +x_B
 
 
-class TVCActuator:
-    def __init__(self, cfg: ActuatorCfg) -> None:
-        self.max_angle = math.radians(cfg.max_angle_deg)
-        self.max_rate = math.radians(cfg.max_rate_deg_s)
-        self.tau = cfg.time_constant_s
-        self.delay = cfg.delay_s
-        self.state = [0.0, 0.0]  # actual angles [rad]
-        self.cmd = [0.0, 0.0]  # latest command issued (post-clip, pre-delay)
-        self._effective = [0.0, 0.0]  # command after transport delay
-        self._queue: deque[tuple[float, float, float]] = deque()
+class ActuatorBank:
+    def __init__(
+        self,
+        max_angle: list[float],
+        max_rate: list[float],
+        time_constant: list[float],
+        delay: list[float],
+    ) -> None:
+        n = len(max_angle)
+        if not (len(max_rate) == len(time_constant) == len(delay) == n) or n == 0:
+            raise ValueError("actuator limit lists must have equal, non-zero length")
+        self.n = n
+        self.max_angle, self.max_rate, self.tau, self.delay = max_angle, max_rate, time_constant, delay
+        self.state = [0.0] * n  # physical actuator positions
+        self.cmd = [0.0] * n  # latest (saturated) command issued
+        self._effective = [0.0] * n
+        self._queue: list[deque[tuple[float, float]]] = [deque() for _ in range(n)]
 
-    def command(self, t: float, cmd: Command) -> None:
-        a = self.max_angle
-        y = min(max(cmd.tvc_y, -a), a)
-        z = min(max(cmd.tvc_z, -a), a)
-        self.cmd = [y, z]
-        self._queue.append((t + self.delay, y, z))
+    def command(self, t: float, values: list[float]) -> None:
+        for i, v in enumerate(values):
+            a = self.max_angle[i]
+            v = min(max(v, -a), a)
+            self.cmd[i] = v
+            self._queue[i].append((t + self.delay[i], v))
 
     def step(self, t: float, h: float) -> None:
-        """Advance the actuator state from t to t + h."""
-        while self._queue and self._queue[0][0] <= t + 1e-12:
-            _, y, z = self._queue.popleft()
-            self._effective = [y, z]
-        gain = 1.0 if self.tau <= 0 else 1.0 - math.exp(-h / self.tau)
-        lim = self.max_rate * h
-        for i in range(2):
+        """Advance every channel from t to t + h."""
+        for i in range(self.n):
+            q = self._queue[i]
+            while q and q[0][0] <= t + 1e-12:
+                self._effective[i] = q.popleft()[1]
+            gain = 1.0 if self.tau[i] <= 0 else 1.0 - math.exp(-h / self.tau[i])
+            lim = self.max_rate[i] * h
             d = (self._effective[i] - self.state[i]) * gain
             d = min(max(d, -lim), lim)
-            self.state[i] = min(max(self.state[i] + d, -self.max_angle), self.max_angle)
+            self.state[i] = min(max(self.state[i] + d, -self.max_angle[i]), self.max_angle[i])
+
+
+class TVCActuator(ActuatorBank):
+    """Two-axis thrust-vector gimbal (channels: about y_B, about z_B)."""
+
+    def __init__(self, cfg: ActuatorCfg) -> None:
+        a = math.radians(cfg.max_angle_deg)
+        r = math.radians(cfg.max_rate_deg_s)
+        super().__init__([a, a], [r, r], [cfg.time_constant_s] * 2, [cfg.delay_s] * 2)
+
+    def command(self, t: float, cmd: Command | list[float]) -> None:
+        if isinstance(cmd, Command):
+            cmd = [cmd.tvc_y, cmd.tvc_z]
+        super().command(t, cmd)

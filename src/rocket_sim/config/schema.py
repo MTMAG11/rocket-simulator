@@ -78,6 +78,7 @@ class FinsCfg:
     sweep_m: float = 0.03
     thickness_m: float = 0.002
     position_from_nose_m: float = 0.0  # leading edge of root chord, aft of nose tip
+    mass_kg: float = 0.0  # mass of the whole fin set (0 = included in the airframe mass)
 
 
 @dataclass
@@ -93,7 +94,9 @@ class ParachuteCfg:
 
 @dataclass
 class AeroCfg:
-    model: str = "buildup"  # buildup | constant | table
+    model: str = (
+        "barrowman"  # simplified | barrowman | enhanced | table | table2d | constant  (buildup = barrowman)
+    )
     cd: float | None = None  # constant model
     cd_table: list[list[float]] | None = None  # [[mach, cd], ...] (coast)
     cd_powered_table: list[list[float]] | None = None  # optional, motor burning
@@ -104,6 +107,9 @@ class AeroCfg:
     surface_roughness_m: float = 60e-6
     crossflow_cd: float = 1.2
     nozzle_exit_ratio: float = 0.7  # nozzle exit diameter / motor diameter (base drag while burning)
+    stall_angle_deg: float = 18.0  # enhanced model: fin lift stalls (saturates) near this angle of attack
+    table2d_file: str | None = None  # table2d model: CSV with columns mach,alpha_deg,cd,cl[,cm]
+    x_cm_ref_from_nose_m: float | None = None  # table2d: reference station of the cm column
 
 
 @dataclass
@@ -119,14 +125,68 @@ class PayloadCfg:
 
 
 @dataclass
+class SectionCfg:
+    """One airframe section, listed from the nose tip aft (positions are computed by stacking)."""
+
+    type: str = "body"  # nose | body | transition | boattail (a transition that narrows)
+    length_m: float = 0.1
+    diameter_m: float | None = None  # nose: base diameter; body: diameter
+    fore_diameter_m: float | None = None  # transition: default = previous section's aft diameter
+    aft_diameter_m: float | None = None  # transition
+    shape: str = "ogive"  # nose profile
+    mass_kg: float = 0.0
+    cg_fraction: float = 0.5  # CG as a fraction of the length from the forward end
+
+
+@dataclass
+class MassItemCfg:
+    """Additional rigid mass (payload, avionics, ballast ...). Inertia defaults to a point mass."""
+
+    name: str = "payload"
+    mass_kg: float = 0.0
+    position_from_nose_m: float = 0.0
+    offset_y_m: float = 0.0  # lateral offset from the axis (body y, right)
+    offset_z_m: float = 0.0  # lateral offset from the axis (body z, down)
+    ixx_kgm2: float = 0.0
+    iyy_kgm2: float = 0.0
+
+
+@dataclass
+class ControlSurfaceCfg:
+    """Movable fin set (canards or tail control fins)."""
+
+    count: int = 4
+    root_chord_m: float = 0.05
+    tip_chord_m: float = 0.03
+    span_m: float = 0.04
+    sweep_m: float = 0.0
+    thickness_m: float = 0.002
+    position_from_nose_m: float = 0.0
+    roll_angle0_deg: float = 0.0
+    max_deflection_deg: float = 10.0
+    max_rate_deg_s: float = 200.0
+    time_constant_s: float = 0.0
+    delay_s: float = 0.0
+    mass_kg: float = 0.0
+
+
+@dataclass
 class RocketCfg:
     name: str = "rocket"
     body_diameter_m: float = 0.041
     body_length_m: float = 0.9
     nose: NoseCfg = field(default_factory=NoseCfg)
     fins: FinsCfg = field(default_factory=FinsCfg)
-    dry_mass_kg: float = 0.35  # airframe incl. recovery, WITHOUT motor
-    cg_from_nose_m: float = 0.55  # dry CG (no motor), aft of nose tip
+    sections: list[SectionCfg] | None = None  # component-based airframe (overrides body_*/nose)
+    reference_diameter_m: float | None = None  # coefficient reference diameter (default: largest diameter)
+    dry_mass_kg: float | None = (
+        None  # lumped airframe mass (incl. recovery, WITHOUT motor); optional with sections
+    )
+    cg_from_nose_m: float | None = (
+        None  # CG of that lumped mass (aft of nose tip); computed if only sections carry mass
+    )
+    masses: list[MassItemCfg] = field(default_factory=list)  # extra rigid masses
+    control_surfaces: ControlSurfaceCfg | None = None
     inertia: InertiaCfg | None = None  # about dry CG; if absent a thin-tube estimate is used
     payload: PayloadCfg | None = None  # extra point mass (counted in addition to dry_mass_kg)
     motor_aft_from_nose_m: float | None = None  # nozzle exit plane; default = body_length_m
@@ -232,6 +292,10 @@ class SensorCfg:
     quantization: float = 0.0  # LSB [units] (0 = none)
     saturation: float = 0.0  # +- full-scale [units] (0 = none)
     latency_s: float = 0.0
+    misalignment_std_deg: float = 0.0  # random small axis misalignment of 3-axis sensors (1-sigma, per run)
+    dropout_probability: float = 0.0  # probability that a sample is lost (Bernoulli per sample)
+    startup_delay_s: float = 0.0  # no samples before this time (e.g. GPS time-to-first-fix)
+    velocity_noise_std: float | None = None  # GPS only: velocity 1-sigma [m/s] (default 0.05 x noise_std)
 
 
 def _imu(rate: float, noise: float, bias: float, walk: float, fs: float) -> SensorCfg:
@@ -252,13 +316,17 @@ class SensorsCfg:
     magnetometer: SensorCfg = field(
         default_factory=lambda: SensorCfg(True, 50.0, 3e-7, 2e-7, 0.0, 0.01, 0.0, 0.0, 0.0)
     )
+    magnetic_field_enu_t: list[float] = field(
+        default_factory=lambda: [0.0, 2.0e-5, -4.0e-5]
+    )  # Earth field, ENU [T]
 
 
 @dataclass
 class EstimatorCfg:
-    type: str = "none"  # none | nav_kf
+    type: str = "none"  # none | nav_kf | truth (perfect state: development/benchmark only)
     alignment_time_s: float = 1.0
     gps_enabled: bool = True
+    estimate_gyro_bias: bool = True  # average the stationary pad gyro during alignment and subtract it
 
 
 @dataclass
@@ -327,7 +395,14 @@ class SimConfig:
             "controller.type",
             "must be none|tvc_attitude|schedule|python",
         )
-        _check(self.estimator.type in ("none", "nav_kf"), "estimator.type", "must be none|nav_kf")
+        _check(
+            self.estimator.type in ("none", "nav_kf", "truth"), "estimator.type", "must be none|nav_kf|truth"
+        )
+        _check(
+            len(self.sensors.magnetic_field_enu_t) == 3 and any(self.sensors.magnetic_field_enu_t),
+            "sensors.magnetic_field_enu_t",
+            "needs 3 components, not all zero",
+        )
         if self.estimator.type != "none" and self.fidelity >= 5:
             _check(
                 self.motor.ignition_delay_s >= self.estimator.alignment_time_s,
@@ -348,8 +423,11 @@ class SimConfig:
                     s.quantization,
                     s.saturation,
                     s.latency_s,
+                    s.misalignment_std_deg,
+                    s.startup_delay_s,
                 )
-                >= 0,
+                >= 0
+                and 0.0 <= s.dropout_probability <= 1.0,
                 p,
                 "noise/bias/limits must be >= 0",
             )
@@ -379,50 +457,142 @@ def _check(cond: bool, path: str, msg: str) -> None:
         raise ConfigError(f"{path}: {msg}")
 
 
+def airframe_length(r: RocketCfg) -> float:
+    """Total airframe length [m] (sum of section lengths, or the legacy body_length_m)."""
+    return sum(sec.length_m for sec in r.sections) if r.sections else r.body_length_m
+
+
 def _validate_rocket(r: RocketCfg) -> None:
     p = "rocket"
-    _check(r.dry_mass_kg > 0, f"{p}.dry_mass_kg", f"must be > 0 (got {r.dry_mass_kg})")
-    _check(r.body_diameter_m > 0, f"{p}.body_diameter_m", f"must be > 0 (got {r.body_diameter_m})")
-    _check(r.body_length_m > r.body_diameter_m, f"{p}.body_length_m", "must exceed body_diameter_m")
-    _check(
-        0.0 < r.cg_from_nose_m < r.body_length_m,
-        f"{p}.cg_from_nose_m",
-        f"must lie inside the body (0, {r.body_length_m}) m",
-    )
-    _check(0.0 < r.nose.length_m < r.body_length_m, f"{p}.nose.length_m", "must be in (0, body_length_m)")
+    length = airframe_length(r)
+    if r.sections:
+        _check(r.sections[0].type == "nose", f"{p}.sections[0].type", "the first section must be the nose")
+        for i, sec in enumerate(r.sections):
+            sp = f"{p}.sections[{i}]"
+            _check(
+                sec.type in ("nose", "body", "transition", "boattail"),
+                f"{sp}.type",
+                "must be nose|body|transition|boattail",
+            )
+            _check(sec.length_m > 0, f"{sp}.length_m", "must be > 0")
+            _check(
+                sec.mass_kg >= 0 and 0.0 <= sec.cg_fraction <= 1.0,
+                sp,
+                "mass_kg >= 0 and cg_fraction in [0, 1]",
+            )
+            if sec.type == "body":
+                _check(
+                    sec.diameter_m is not None and sec.diameter_m > 0,
+                    f"{sp}.diameter_m",
+                    "required (> 0) for a body",
+                )
+            if sec.type in ("transition", "boattail"):
+                _check(
+                    sec.aft_diameter_m is not None and sec.aft_diameter_m > 0,
+                    f"{sp}.aft_diameter_m",
+                    "required (> 0)",
+                )
+        _check(
+            sum(sec.mass_kg for sec in r.sections)
+            + sum(m.mass_kg for m in r.masses)
+            + (r.dry_mass_kg or 0.0)
+            + r.fins.mass_kg
+            > 0,
+            f"{p}.sections",
+            "no mass given: set section mass_kg, masses[] or a lumped dry_mass_kg",
+        )
+    else:
+        _check(
+            r.dry_mass_kg is not None and r.dry_mass_kg > 0,
+            f"{p}.dry_mass_kg",
+            f"must be > 0 (got {r.dry_mass_kg})",
+        )
+        _check(r.body_diameter_m > 0, f"{p}.body_diameter_m", f"must be > 0 (got {r.body_diameter_m})")
+        _check(r.body_length_m > r.body_diameter_m, f"{p}.body_length_m", "must exceed body_diameter_m")
+        _check(
+            r.cg_from_nose_m is not None,
+            f"{p}.cg_from_nose_m",
+            "required with a lumped dry_mass_kg and no sections",
+        )
+        _check(0.0 < r.nose.length_m < r.body_length_m, f"{p}.nose.length_m", "must be in (0, body_length_m)")
+    if r.dry_mass_kg is not None:
+        _check(r.dry_mass_kg >= 0, f"{p}.dry_mass_kg", f"must be >= 0 (got {r.dry_mass_kg})")
+        if r.dry_mass_kg > 0:
+            _check(
+                r.cg_from_nose_m is not None,
+                f"{p}.cg_from_nose_m",
+                "required when a lumped dry_mass_kg is given",
+            )
+    if r.cg_from_nose_m is not None:
+        _check(
+            0.0 < r.cg_from_nose_m < length,
+            f"{p}.cg_from_nose_m",
+            f"must lie inside the airframe (0, {length}) m",
+        )
+    nose_len = r.sections[0].length_m if r.sections else r.nose.length_m
     if r.fins.count > 0:
         f = r.fins
         _check(
-            f.position_from_nose_m + f.root_chord_m <= r.body_length_m + 1e-9,
+            f.position_from_nose_m + f.root_chord_m <= length + 1e-9,
             f"{p}.fins",
             "fin root chord extends beyond the body base",
         )
         _check(
-            f.position_from_nose_m >= r.nose.length_m - 1e-9,
+            f.position_from_nose_m >= nose_len - 1e-9,
             f"{p}.fins.position_from_nose_m",
             "fins cannot start on the nose cone",
+        )
+    for i, m in enumerate(r.masses):
+        _check(m.mass_kg >= 0, f"{p}.masses[{i}].mass_kg", "must be >= 0")
+        _check(
+            0.0 <= m.position_from_nose_m <= length,
+            f"{p}.masses[{i}].position_from_nose_m",
+            "must be inside the airframe",
+        )
+    if r.control_surfaces is not None:
+        c = r.control_surfaces
+        _check(c.count >= 2, f"{p}.control_surfaces.count", "must be >= 2")
+        _check(
+            c.max_deflection_deg > 0 and c.max_rate_deg_s > 0 and c.time_constant_s >= 0 and c.delay_s >= 0,
+            f"{p}.control_surfaces",
+            "max_deflection_deg/max_rate_deg_s > 0, time_constant_s/delay_s >= 0",
+        )
+        _check(
+            c.position_from_nose_m >= 0.0 and c.position_from_nose_m + c.root_chord_m <= length + 1e-9,
+            f"{p}.control_surfaces.position_from_nose_m",
+            "control surface must lie on the airframe",
         )
     if r.inertia is not None:
         _check(r.inertia.ixx_kgm2 > 0 and r.inertia.iyy_kgm2 > 0, f"{p}.inertia", "inertias must be > 0")
     if r.payload is not None:
         _check(r.payload.mass_kg >= 0, f"{p}.payload.mass_kg", "must be >= 0")
         _check(
-            0.0 <= r.payload.position_from_nose_m <= r.body_length_m,
+            0.0 <= r.payload.position_from_nose_m <= length,
             f"{p}.payload.position_from_nose_m",
             "must be inside the body",
         )
     if r.motor_aft_from_nose_m is not None:
         _check(
-            0.0 < r.motor_aft_from_nose_m <= r.body_length_m + 1e-9,
+            0.0 < r.motor_aft_from_nose_m <= length + 1e-9,
             f"{p}.motor_aft_from_nose_m",
             "must be within the body length",
         )
     a = r.aero
-    _check(a.model in ("buildup", "constant", "table"), f"{p}.aero.model", "must be buildup|constant|table")
+    _check(
+        a.model in ("buildup", "simplified", "barrowman", "enhanced", "constant", "table", "table2d"),
+        f"{p}.aero.model",
+        "must be simplified|barrowman|enhanced|table|table2d|constant",
+    )
     _check(a.drag_scale > 0, f"{p}.aero.drag_scale", "must be > 0")
     _check(0.0 <= a.nozzle_exit_ratio < 1.0, f"{p}.aero.nozzle_exit_ratio", "must be in [0, 1)")
-    if a.model == "constant":
-        _check(a.cd is not None and a.cd >= 0, f"{p}.aero.cd", "required (>= 0) for the constant model")
+    if a.model in ("constant", "simplified"):
+        _check(
+            a.cd is not None and a.cd >= 0,
+            f"{p}.aero.cd",
+            "required (>= 0) for the constant/simplified model",
+        )
+    if a.model == "table2d":
+        _check(a.table2d_file is not None, f"{p}.aero.table2d_file", "required for the table2d model")
     if a.model == "table":
         _check(
             a.cd_table is not None and len(a.cd_table) >= 1 and all(len(row) == 2 for row in a.cd_table),

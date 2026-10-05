@@ -197,11 +197,13 @@ def test_tabular_features_resampled_and_lagged(rec):
     assert tab.t[0] == pytest.approx(lift) and tab.t[-1] <= land + 1e-9
     assert np.allclose(np.diff(tab.t), 0.1)
     # resampled values equal direct interpolation of the record
-    assert np.allclose(tab.inputs[:, 0], np.interp(tab.t, t, rec.col("pos_z")))
-    # lag-2 column is the same signal delayed by two resampled steps
-    vz = np.interp(tab.t, t, rec.col("vel_z"))
-    assert np.allclose(tab.inputs[2:, 1], vz[:-2])
-    assert np.allclose(tab.targets[:, 0], vz)
+    # inputs are zero-order held (causal); targets (labels) are interpolated
+    idx = np.clip(np.searchsorted(t, tab.t, side="right") - 1, 0, len(t) - 1)
+    assert np.allclose(tab.inputs[:, 0], rec.col("pos_z")[idx])
+    # lag-2 column is the same (held) signal delayed by two resampled steps
+    vz_in = rec.col("vel_z")[idx]
+    assert np.allclose(tab.inputs[2:, 1], vz_in[:-2])
+    assert np.allclose(tab.targets[:, 0], np.interp(tab.t, t, rec.col("vel_z")))
 
 
 @pytest.mark.parametrize(

@@ -1,0 +1,14 @@
+Validation: erebus11_euroc_2022
+  source: Erebus team (EuRoC 2022) via RocketPy example data  (quality: Tier 2: student team; COTS altimeter altitude filtered, 20 Hz; parameters from a secondary source (RocketPy notebook))
+  simulation fidelity 3, dt 0.005 s, time shift applied -0.404 s
+
+  Apogee (AGL)                 real   3001.75  sim   2809.75 m      error  -192.00 ( -6.40 %)
+  Apogee time                  real     22.80  sim     22.35 s      error    -0.45 ( -1.95 %)
+  Max velocity                 real    384.64  sim    288.65 m/s    error   -95.99 (-24.96 %)
+  altitude (all)       n=  746  RMSE  914.855  MAE  544.799  max|e| 2601.670  bias +395.333  NRMSE 30.48 %
+  altitude (ascent)    n=  459  RMSE  124.414  MAE  112.419  max|e|  192.904  bias -109.633  NRMSE  4.14 %
+  altitude (descent)   n=  287  RMSE 1466.546  MAE 1236.306  max|e| 2601.670  bias +1202.928  NRMSE 48.94 %
+  velocity             n=  459  RMSE   31.557  MAE   19.621  max|e|  122.246  bias   -8.790  NRMSE  8.01 %
+  note: simulated altitude compared as: barometric
+  note: landing time not compared (parachute parameters of this flight are not documented)
+  note: real velocity derived from altitude (0.6 s local quadratic fit); not independent data

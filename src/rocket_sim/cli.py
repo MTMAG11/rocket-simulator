@@ -4,6 +4,8 @@ simulate CONFIG                 run one flight, print a summary, optionally expo
 batch SPEC [--runs N]           Monte-Carlo batch (parallel, checkpointed, resumable)
 generate-dataset SPEC           same engine, ML dataset kinds (tabular / windowed)
 validate FLIGHT.yaml            compare the simulator against real telemetry
+experiment FILE.yaml           versioned dataset experiment (--verify DIR, --list)
+validate-registry              run the flight registry (development / calibration / holdout split)
 export SOURCE                   convert a saved record / pull one run out of a dataset
 inspect DATASET [--run ID]      browse a dataset's manifest/runs without loading telemetry
 benchmark                       throughput of single runs, small batches, dataset generation
@@ -103,9 +105,93 @@ def cmd_batch(a: argparse.Namespace) -> int:
 
 def cmd_validate(a: argparse.Namespace) -> int:
     from .validation.compare import run_validation
+    from .validation.registry import load_registry
 
+    try:  # refuse holdout flights here: they must go through the logged protocol
+        reg = load_registry(a.registry)
+        me = Path(a.flight).resolve()
+        for f in reg.by_split("holdout"):
+            if f.definition.resolve() == me:
+                raise RocketSimError(
+                    f"{f.id} is a HOLDOUT flight: use `rocketsim validate-registry --split holdout --confirm-frozen` "
+                    "(logged, fingerprinted) instead of `validate`"
+                )
+    except FileNotFoundError:
+        raise RocketSimError(
+            f"registry {a.registry} not found: cannot check whether {a.flight} is a holdout flight (pass --registry)"
+        ) from None
     res = run_validation(a.flight, out_dir=a.out, plot=not a.no_plot)
     print(res.report_text())
+    return 0
+
+
+def cmd_validate_registry(a: argparse.Namespace) -> int:
+    from .validation.registry import SPLITS, load_registry, migrate_fingerprint, run_registry, summarize
+
+    reg = load_registry(a.registry)
+    if a.log is None:
+        a.log = str(reg.path.resolve().parent.parent / "validation_results" / "holdout_log.jsonl")
+    if a.migrate_fingerprint:
+        r = migrate_fingerprint(reg, a.log)
+        for c in r["checked"]:
+            print(
+                f"  {c['flight']:<10} logged {c['logged']:+.6f} %  now {c['now']:+.6f} %  reproduces: {c['reproduces']}"
+            )
+        print(
+            "migration recorded"
+            if r["ok"] and r["migrating_from"]
+            else ("nothing to migrate" if r["ok"] else "NOT reproduced: holdout entries stay STALE")
+        )
+        return 0 if r["ok"] else 1
+    if a.status:
+        from .validation.registry import holdout_status, physics_fingerprint, read_log, verify_log
+
+        if not Path(a.log).exists():
+            print(f"  WARNING: log {a.log} does not exist: every holdout flight reads as unevaluated")
+        log, fp = read_log(Path(a.log)), physics_fingerprint()
+        for f in reg.by_split("holdout"):
+            print(f"  {f.id:<10} holdout status: {holdout_status(f.id, log, fp)}")
+        problems = verify_log(Path(a.log))
+        print("  log chain: " + ("intact" if not problems else "; ".join(problems)))
+        return 0
+    splits = SPLITS if a.split == "all" else (a.split,)
+    overrides = {}
+    for kv in a.set or []:
+        k, _, v = kv.partition("=")
+        overrides[k] = float(v)
+    rows = run_registry(
+        reg,
+        splits,
+        a.out,
+        a.confirm_frozen,
+        overrides or None,
+        a.calibration_id,
+        log_path=a.log,
+        only=tuple(a.only) if a.only else None,
+    )
+    print(summarize(rows))
+    return 0
+
+
+def cmd_experiment(a: argparse.Namespace) -> int:
+    from .experiments import list_experiments, run_experiment, verify_experiment
+
+    if a.list:
+        for e in list_experiments(a.root):
+            print(
+                f"{e['experiment_id']}  seed {e['master_seed']}  accepted {e['counts']['simulations_accepted']}/{e['counts']['simulations_requested']}"
+            )
+        return 0
+    if a.verify:
+        r = verify_experiment(a.verify)
+        print(f"{r['experiment_id']}: {r['shards']} shards, reproduced bit-identically: {r['identical']}")
+        if r["mismatched"]:
+            print("  mismatched:", ", ".join(r["mismatched"]))
+        return 0 if r["identical"] else 1
+    if not a.file:
+        raise RocketSimError("give an experiment file, --verify DIR or --list")
+    out = run_experiment(a.file, a.root, a.workers)
+    print(f"experiment written to {out}")
     return 0
 
 
@@ -145,7 +231,8 @@ def cmd_inspect(a: argparse.Namespace) -> int:
 def cmd_benchmark(a: argparse.Namespace) -> int:
     from .benchmark import run_benchmarks
 
-    print(run_benchmarks(quick=a.quick, workers=a.workers))
+    scales = tuple(int(x) for x in a.scales.split(",")) if a.scales else None
+    print(run_benchmarks(quick=a.quick, workers=a.workers, scales=scales))
     return 0
 
 
@@ -224,7 +311,50 @@ def build_parser() -> argparse.ArgumentParser:
     v.add_argument("flight", help="flight definition YAML (see validation_data/)")
     v.add_argument("--out", help="output directory for report/plots")
     v.add_argument("--no-plot", action="store_true")
+    v.add_argument(
+        "--registry", default="validation_data/registry.yaml", help="registry used to refuse holdout flights"
+    )
     v.set_defaults(fn=cmd_validate)
+
+    r = sub.add_parser("validate-registry", help="run the flight registry (development/calibration/holdout)")
+    r.add_argument("--registry", default="validation_data/registry.yaml")
+    r.add_argument("--split", default="development", choices=["development", "calibration", "holdout", "all"])
+    r.add_argument(
+        "--confirm-frozen", action="store_true", help="REQUIRED to simulate holdout flights; logged"
+    )
+    r.add_argument("--out", help="output directory (also holds holdout_log.jsonl)")
+    r.add_argument(
+        "--set",
+        action="append",
+        metavar="PATH=VALUE",
+        help="config override, e.g. rocket.aero.drag_scale=0.95",
+    )
+    r.add_argument(
+        "--log",
+        default=None,
+        help="append-only holdout evaluation log (default: <registry dir>/../validation_results/holdout_log.jsonl, NOT cwd-relative)",
+    )
+    r.add_argument(
+        "--status",
+        action="store_true",
+        help="print holdout status (current/stale/unevaluated) and verify the log hash chain",
+    )
+    r.add_argument(
+        "--migrate-fingerprint",
+        action="store_true",
+        help="declare the current physics fingerprint equivalent to logged ones IF every logged holdout result reproduces",
+    )
+    r.add_argument("--only", action="append", metavar="FLIGHT_ID", help="restrict to these flight ids")
+    r.add_argument("--calibration-id", help="id of the calibration record that produced --set values")
+    r.set_defaults(fn=cmd_validate_registry)
+
+    x = sub.add_parser("experiment", help="run / verify / list versioned dataset experiments")
+    x.add_argument("file", nargs="?", help="experiment YAML (name, batch, optional master_seed)")
+    x.add_argument("--root", help="experiments directory (default: ./experiments)")
+    x.add_argument("--workers", type=int)
+    x.add_argument("--verify", metavar="DIR", help="re-generate an experiment and compare shard hashes")
+    x.add_argument("--list", action="store_true")
+    x.set_defaults(fn=cmd_experiment)
 
     e = sub.add_parser("export", help="convert a saved record or extract a run from a dataset")
     e.add_argument("source")
@@ -243,6 +373,9 @@ def build_parser() -> argparse.ArgumentParser:
     k = sub.add_parser("benchmark", help="measure simulation throughput")
     k.add_argument("--quick", action="store_true")
     k.add_argument("--workers", type=int, default=0)
+    k.add_argument(
+        "--scales", help="comma-separated run counts for the scaling ladder (default 1,100,1000,10000)"
+    )
     k.set_defaults(fn=cmd_benchmark)
 
     c = sub.add_parser("check", help="validate a config file")

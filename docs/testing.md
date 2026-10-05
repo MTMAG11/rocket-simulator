@@ -1,7 +1,7 @@
 # Testing
 
 ```bash
-pytest                      # 160 tests, ~10 min on a slow machine (includes 3 real-flight regression tests marked slow)
+pytest                      # 294 tests (3 real-flight regression tests are marked slow)
 pytest -m "not slow"        # skip the slow tests
 ruff check src tests && ruff format --check src tests
 mypy src/rocket_sim
@@ -20,9 +20,27 @@ Expected answers come from closed-form physics or independent data wherever poss
 | `test_data.py` | export round trips (4 formats), schema integrity, quality gates, seed derivation/distributions, windows/alignment, batch end-to-end, worker-count independence, crash/resume, rejection logging, split disjointness and hold-out, windowed shards |
 | `test_gnc.py` | sensor statistics, bias walk, quantisation, saturation, rate, latency, truth != measurement, TRIAD, gyro integration, launch detector, Kalman filter accuracy, actuator, closed-loop TVC stabilisation of an unstable vehicle |
 | `test_validation_cli.py` | metrics, telemetry import, self-consistency of the comparison pipeline, real-flight regression guards, uncertainty formatting, CLI |
+| `test_golden.py` | tight (1e-9) golden numbers keyed to `PHYSICS_VERSION` (3-DOF and 6-DOF reference runs) |
+| `test_geometry_mass.py` (V1.1) | Barrowman by hand, telescoping invariant, boat-tail, assembly validation, CG from components and burn shift, inertia tensor vs independent summation, parallel axis, Euler invariants for an asymmetric body |
+| `test_aero_v11.py` (V1.1) | model hierarchy interface (CD/CL/Cm), small-angle limits, alpha/beta relative-wind geometry independent of the simulator, Reynolds/Mach trends, enhanced fin lift vs Helmbold/Ackeret, fin stall, boat-tail attached/separated, lookup and 2-D table models |
+| `test_control_v11.py` (V1.1) | TVC zero/+/-/max gimbal, actuator saturation/rate/lag/delay exactness, physics uses the ACTUAL actuator state, control-fin force/moment analytics, mixer decoupling, closed-loop fin stabilisation |
+| `test_sensors_v11.py` (V1.1) | GPS dropout rate and start-up delay, velocity vs position noise, misalignment, async rates and latency, truth estimator, TRIAD with declination, gyro-bias recovery |
+| `test_numerics_v11.py` (V1.1) | quaternion algebra and long-run integration, conservation limits (no force / gravity / thrust / drag / torque), 5-step convergence ladder |
+| `test_dataset_v11.py` (V1.1) | copula marginals and dependence, linked parameters, near-duplicate and temporal-leakage detectors (with negative controls), statistics/KS/traceability in the manifest, quality-gate classes, versioned experiment reproduction |
+| `test_validation_v11.py` (V1.1) | registry/splits, AST fingerprint, holdout skip/log/stale/migration, calibration record, documented-number guards, input-uncertainty sampler |
 
 `conftest.py` drives the dynamics directly with constructed vehicles for the analytic tests.
 
 Bugs these tests caught during development: thrust returned 0 at the exact curve end points (breaking constant-thrust
 analytic cases), a transposed rotation matrix in TRIAD alignment, tail-first flight being aerodynamically stable, GPS
 latency ignored by the filter, off-by-one handling of loop variables in the event code.
+
+
+## V1.1 policy notes
+
+* Holdout flights are never simulated by the test-suite (only by the guarded CLI); tests of the holdout mechanics use a
+  throw-away registry that points at a development flight.
+* Negative controls: the temporal-leakage detector is shown to *fail* on a leaky pipeline, and migration is shown to be
+  refused when a logged result does not reproduce - a detector that cannot fail proves nothing.
+* Numbers quoted in the documentation are guarded: `test_logged_holdout_results_match_the_documented_numbers`,
+  `test_recorded_input_mc_results_are_consistent`, `test_calibration_flight_regression`, `test_golden.py`.

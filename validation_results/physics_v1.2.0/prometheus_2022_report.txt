@@ -1,0 +1,13 @@
+Validation: prometheus_2022
+  source: Prometheus team via RocketPy example data  (quality: university team; commercial flight computer (AltOS TeleMetrum, baro+accel Kalman-filtered height and speed); parameters from a secondary source (RocketPy docs))
+  simulation fidelity 3, dt 0.005 s, time shift applied -0.113 s
+
+  Apogee (AGL)                 real   3903.77  sim   3712.45 m      error  -191.32 ( -4.90 %)
+  Apogee time                  real     28.99  sim     27.37 s      error    -1.62 ( -5.60 %)
+  Max velocity                 real    317.88  sim    317.05 m/s    error    -0.83 ( -0.26 %)
+  Landing time                 real    222.00  sim    212.16 s      error    -9.84 ( -4.43 %)
+  altitude (all)       n= 5373  RMSE  141.269  MAE  122.648  max|e|  415.263  bias  -46.018  NRMSE  3.62 %
+  altitude (ascent)    n= 2992  RMSE  146.864  MAE  121.070  max|e|  415.263  bias  +16.541  NRMSE  3.76 %
+  altitude (descent)   n= 2381  RMSE  133.908  MAE  124.631  max|e|  215.593  bias -124.631  NRMSE  3.50 %
+  velocity             n= 2992  RMSE   10.740  MAE   10.049  max|e|   12.793  bias   -9.358  NRMSE  3.38 %
+  note: simulated altitude compared as: barometric

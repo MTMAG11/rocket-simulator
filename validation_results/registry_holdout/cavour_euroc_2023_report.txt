@@ -1,0 +1,14 @@
+Validation: cavour_euroc_2023
+  source: Polito team (EuRoC 2023) via RocketPy example data  (quality: Tier 2: student team; altimeter altitude and velocity, ~6 Hz; parameters from a secondary source (RocketPy notebook))
+  simulation fidelity 3, dt 0.005 s, time shift applied -0.099 s
+
+  Apogee (AGL)                 real   2789.00  sim   2915.02 m      error  +126.02 ( +4.52 %)
+  Apogee time                  real     23.30  sim     22.74 s      error    -0.56 ( -2.39 %)
+  Max velocity                 real    322.35  sim    296.13 m/s    error   -26.21 ( -8.13 %)
+  altitude (all)       n=  404  RMSE 1005.688  MAE  743.995  max|e| 2108.228  bias +743.456  NRMSE 36.06 %
+  altitude (ascent)    n=  132  RMSE  106.625  MAE   93.486  max|e|  133.427  bias  +91.835  NRMSE  3.82 %
+  altitude (descent)   n=  272  RMSE 1223.406  MAE 1059.683  max|e| 2108.228  bias +1059.683  NRMSE 44.44 %
+  velocity             n=  106  RMSE   13.016  MAE    8.083  max|e|   33.773  bias   +5.038  NRMSE  4.03 %
+  note: simulated altitude compared as: barometric
+  note: landing time not compared (parachute parameters of this flight are not documented)
+  note: real velocity derived from altitude (0.6 s local quadratic fit); not independent data

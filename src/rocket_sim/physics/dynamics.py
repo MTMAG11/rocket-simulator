@@ -17,7 +17,7 @@ Equations (6-DOF), launch frame L (ENU), body frame B (x nose, FRD):
     r_dot = v
     m v_dot = R(q) (F_thrust + F_aero)_B + F_chute_L + m g_L,        g_L = (0, 0, -g(h))
     q_dot = 1/2 q (x) (0, omega)
-    I omega_dot = M - omega x (I omega),      I = diag(Ixx, Iyy, Iyy)
+    I omega_dot = M - omega x (I omega),      I = 3x3 tensor (diag(Ixx, Iyy, Iyy) on the fast path)
 
 Thrust is an external force (momentum thrust is inside the thrust-curve value); the mass-flow
 induced terms (jet damping, dI/dt * omega, propellant relative momentum) are neglected.
@@ -28,7 +28,7 @@ sliding backwards). See docs/physics.md for assumptions and references.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import NamedTuple
 
 import numpy as np
@@ -36,6 +36,33 @@ import numpy as np
 from ..environment import Environment
 from ..vehicle import Vehicle
 from .math3d import Quat, Vec, quat_from_pointing, quat_rotate, quat_rotate_inv
+
+
+def euler_angular_acceleration(mp, m: Vec, w: Vec) -> Vec:
+    """Solve I w_dot = M - w x (I w) for the full symmetric inertia tensor (body axes)."""
+    ixx, iyy, izz = mp.ixx, mp.iyy, mp.izz_eff
+    ixy, ixz, iyz = mp.ixy, mp.ixz, mp.iyz  # products of inertia (matrix entries are the negatives)
+    p, q, r = w
+    hx = ixx * p - ixy * q - ixz * r
+    hy = -ixy * p + iyy * q - iyz * r
+    hz = -ixz * p - iyz * q + izz * r
+    rx = m[0] - (q * hz - r * hy)
+    ry = m[1] - (r * hx - p * hz)
+    rz = m[2] - (p * hy - q * hx)
+    a11, a12, a13 = ixx, -ixy, -ixz
+    a22, a23, a33 = iyy, -iyz, izz
+    det = a11 * (a22 * a33 - a23 * a23) - a12 * (a12 * a33 - a23 * a13) + a13 * (a12 * a23 - a22 * a13)
+    i11 = (a22 * a33 - a23 * a23) / det
+    i12 = (a13 * a23 - a12 * a33) / det
+    i13 = (a12 * a23 - a13 * a22) / det
+    i22 = (a11 * a33 - a13 * a13) / det
+    i23 = (a12 * a13 - a11 * a23) / det
+    i33 = (a11 * a22 - a12 * a12) / det
+    return (
+        i11 * rx + i12 * ry + i13 * rz,
+        i12 * rx + i22 * ry + i23 * rz,
+        i13 * rx + i23 * ry + i33 * rz,
+    )
 
 
 class Eval(NamedTuple):
@@ -71,8 +98,9 @@ class Eval(NamedTuple):
 class Controls:
     """Actuator state applied to the physics (held constant across an integration step)."""
 
-    tvc_y: float = 0.0  # thrust deflection about body y [rad]
+    tvc_y: float = 0.0  # thrust deflection about body y [rad] (ACTUAL actuator state)
     tvc_z: float = 0.0  # thrust deflection about body z [rad]
+    fin: list[float] = field(default_factory=list)  # actual deflection of each control fin [rad]
 
 
 @dataclass(frozen=True)
@@ -104,7 +132,7 @@ class _BaseDynamics:
         """Forces/environment at (t, y). One-entry memo: the simulator evaluates the state at the
         start of a step for logging and RK4's first stage needs the same value."""
         c = self.controls
-        key = (t, y.tobytes(), c.tvc_y, c.tvc_z, self.on_rail, tuple(self.chute_starts))
+        key = (t, y.tobytes(), c.tvc_y, c.tvc_z, tuple(c.fin), self.on_rail, tuple(self.chute_starts))
         hit = self._cache
         if hit is not None and hit[0] == key:
             return hit[1]
@@ -278,7 +306,7 @@ class PointMass3DOF(_BaseDynamics):
             cp,
             mp.ixx,
             mp.iyy,
-            (cp - mp.x_cg) / veh.body.diameter,
+            (cp - mp.x_cg) / veh.aero.ref_diameter,
         )
 
     def _rail_accel(self, y: np.ndarray, ax: float, ay: float, az: float) -> Vec:
@@ -345,16 +373,18 @@ class RigidBody6DOF(_BaseDynamics):
         u, v, ww = quat_rotate_inv(quat, vrel_l)
         airspeed = math.sqrt(u * u + v * v + ww * ww)
 
-        # thrust: gimballed + fixed misalignment, applied at the nozzle exit plane
+        # thrust: gimballed (ACTUAL actuator state) + fixed misalignment, applied at the nozzle exit plane
         th_y = self.controls.tvc_y + self._mis[0]
         th_z = self.controls.tvc_z + self._mis[1]
         cz = math.cos(th_z)
         tdx, tdy, tdz = cz * math.cos(th_y), math.sin(th_z), -cz * math.sin(th_y)
         fbx, fby, fbz = thrust * tdx, thrust * tdy, thrust * tdz
         rn = mp.x_cg - veh.nozzle_x  # nozzle position forward of CG (negative: it is aft)
-        mx = 0.0
-        my = -rn * fbz
-        mz = rn * fby
+        yc, zc = mp.y_cg, mp.z_cg  # CG offsets from the nose axis (0 for axisymmetric vehicles)
+        # moment = r x F with r = (rn, -yc, -zc) from the CG to the nozzle exit
+        mx = zc * fby - yc * fbz
+        my = -zc * fbx - rn * fbz
+        mz = rn * fby + yc * fbx
 
         drag = lift = chute = 0.0
         mach = qdyn = alpha = beta = 0.0
@@ -363,33 +393,50 @@ class RigidBody6DOF(_BaseDynamics):
         if airspeed > 1e-6:
             mach = airspeed / atm.speed_of_sound
             re = atm.density * airspeed * self._body_len / atm.viscosity
-            c = veh.aero.coefficients(mach, re, powered)
-            x_cp = c.x_cp
             qdyn = 0.5 * atm.density * airspeed * airspeed
             s_ref = veh.aero.ref_area
             lat = math.hypot(v, ww)
-            sa = lat / airspeed  # sin(alpha)
-            ca = u / airspeed  # cos(alpha)
             alpha = math.atan2(lat, u)
             beta = math.asin(max(-1.0, min(1.0, v / airspeed)))
-            # axial force (drag at alpha=0) and lateral forces opposing the lateral air velocity
-            fax = -qdyn * s_ref * c.cd0 * ca
-            f_n = qdyn * s_ref * c.cn_alpha * sa * abs(ca)  # |cos|: reversed flow is destabilising
-            f_cf = qdyn * veh.aero.crossflow_cd * veh.aero.planform_area * sa * sa
+            fc = veh.aero.force_coefficients(mach, alpha, re, powered)
+            x_cp = fc.x_cp_static
+            # axial force (drag at alpha = 0) and the normal force opposing the lateral air velocity
+            fax = -qdyn * s_ref * fc.ca
+            f_n = qdyn * s_ref * fc.cn
             if lat > 1e-9:
                 ly, lz = -v / lat, -ww / lat
             else:
                 ly = lz = 0.0
-            fay_n, faz_n = f_n * ly, f_n * lz
-            fay_c, faz_c = f_cf * ly, f_cf * lz
+            fay, faz = f_n * ly, f_n * lz
+            # aerodynamic force acts at the centre of pressure of the normal force: r = (rx, -yc, -zc)
+            rx = mp.x_cg - fc.x_cp_force
+            mx += zc * fay - yc * faz
+            my += -zc * fax - rx * faz
+            mz += rx * fay + yc * fax
+            # movable control surfaces (canards / tail fins): force along the fin normal, at the fin AC
+            cfins = veh.aero.control_fins
+            if cfins:
+                kmach = veh.aero.control_cn_alpha(mach)
+                for cf, dlt in zip(cfins, self.controls.fin):
+                    if dlt == 0.0:
+                        continue
+                    lift_i = qdyn * s_ref * cf.cn_alpha_single * kmach * dlt
+                    sphi, cphi = math.sin(cf.phi), math.cos(cf.phi)
+                    fx_i, fy_i, fz_i = (
+                        -abs(lift_i * dlt),
+                        -lift_i * sphi,
+                        lift_i * cphi,
+                    )  # |L d|: induced drag
+                    fax += fx_i
+                    fay += fy_i
+                    faz += fz_i
+                    rxi, py, pz = mp.x_cg - cf.x_ac, cf.rho * cphi - yc, cf.rho * sphi - zc
+                    mx += py * fz_i - pz * fy_i
+                    my += pz * fx_i - rxi * fz_i
+                    mz += rxi * fy_i - py * fx_i
             fbx += fax
-            fby += fay_n + fay_c
-            fbz += faz_n + faz_c
-            # moments of the lateral forces about the CG (lever arms forward of CG)
-            rx_cp = mp.x_cg - x_cp
-            rx_cf = mp.x_cg - veh.aero.x_crossflow
-            my += -rx_cp * faz_n - rx_cf * faz_c
-            mz += rx_cp * fay_n + rx_cf * fay_c
+            fby += fay
+            fbz += faz
             # damping from strip theory: c = 1/2 rho V S sum(CNa_i x_i^2); roll: rho V S CNa r^2
             cdamp = 0.0
             for cn_i, x_i in veh.aero.damping_surfaces:
@@ -406,10 +453,10 @@ class RigidBody6DOF(_BaseDynamics):
                 * veh.aero.roll_damping_radius**2
                 * p
             )
-            # diagnostics: project total aero force onto the relative wind
-            fa_dot_v = (fax * u + (fay_n + fay_c) * v + (faz_n + faz_c) * ww) / airspeed
+            # diagnostics: project the total aerodynamic force onto the relative wind
+            fa_dot_v = (fax * u + fay * v + faz * ww) / airspeed
             drag = -fa_dot_v
-            f2 = fax * fax + (fay_n + fay_c) ** 2 + (faz_n + faz_c) ** 2
+            f2 = fax * fax + fay * fay + faz * faz
             lift = math.sqrt(max(f2 - fa_dot_v * fa_dot_v, 0.0))
             cda = self.chute_cda(t)
             if cda > 0.0:
@@ -421,8 +468,9 @@ class RigidBody6DOF(_BaseDynamics):
                 # airframe hang from the canopy (stable equilibrium) instead of tumbling
                 cb = quat_rotate_inv(quat, (cfx, cfy, cfz))
                 r_att = mp.x_cg - veh.parachutes[0].attach
-                my += -r_att * cb[2]
-                mz += r_att * cb[1]
+                mx += zc * cb[1] - yc * cb[2]
+                my += -zc * cb[0] - r_att * cb[2]
+                mz += r_att * cb[1] + yc * cb[0]
 
         if x_cp < 0.0:
             x_cp = veh.aero.coefficients(0.0, 1e6, powered).x_cp
@@ -439,13 +487,15 @@ class RigidBody6DOF(_BaseDynamics):
                 a_ax = 0.0
             ax, ay, az = a_ax * axis[0], a_ax * axis[1], a_ax * axis[2]
             wdot = (0.0, 0.0, 0.0)
-        else:
-            ixx, iyy = mp.ixx, mp.iyy
+        elif mp.izz is None and mp.ixy == 0.0 and mp.ixz == 0.0 and mp.iyz == 0.0:
+            ixx, iyy = mp.ixx, mp.iyy  # axisymmetric: the Euler equations reduce to the V1 form
             wdot = (
                 mx / ixx,
                 (my + (iyy - ixx) * r * p) / iyy,
                 (mz + (ixx - iyy) * p * q) / iyy,
             )
+        else:
+            wdot = euler_angular_acceleration(mp, (mx, my, mz), (p, q, r))
         sf = quat_rotate_inv(quat, (ax, ay, az + g))
         return Eval(
             (ax, ay, az),
@@ -471,7 +521,7 @@ class RigidBody6DOF(_BaseDynamics):
             x_cp,
             mp.ixx,
             mp.iyy,
-            (x_cp - mp.x_cg) / veh.body.diameter,
+            (x_cp - mp.x_cg) / veh.aero.ref_diameter,
         )
 
     def derivative(self, t: float, y: np.ndarray) -> np.ndarray:

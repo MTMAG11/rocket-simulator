@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from ..errors import ConfigError
-from .montecarlo import ParamSpec
+from .montecarlo import CorrelationSpec, ParamSpec
 from .quality import QualityLimits
 
 DERIVED_FEATURES = ("time_since_ignition", "time_since_launch_detected")
@@ -121,6 +121,7 @@ class BatchSpec:
     runs: int | None = None
     splits: dict[str, SplitSpec] = field(default_factory=dict)
     parameters: list[ParamSpec] = field(default_factory=list)
+    correlations: list[CorrelationSpec] = field(default_factory=list)
     shard_runs: int = 50
     workers: int = 0
     dataset: DatasetSection = field(default_factory=DatasetSection)
@@ -142,6 +143,8 @@ class BatchSpec:
             raise ConfigError("batch spec: workers must be >= 0")
         for p in self.parameters:
             p.validate()
+        for c in self.correlations:
+            c.validate(self.parameters)
         for nm, sp in self.splits.items():
             if sp.runs < 1:
                 raise ConfigError(f"splits.{nm}: runs must be >= 1")

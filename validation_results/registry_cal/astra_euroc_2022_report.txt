@@ -1,0 +1,12 @@
+Validation: astra_euroc_2022
+  source: Astra team (EuRoC 2022) via RocketPy example data  (quality: Tier 3: sparse (~1 Hz) altitude samples, sensor type undocumented (possibly GPS-derived); parameters from a secondary source (RocketPy notebook))
+  simulation fidelity 3, dt 0.005 s, time shift applied -0.482 s
+
+  Apogee (AGL)                 real   3249.46  sim   3219.09 m      error   -30.37 ( -0.93 %)
+  Apogee time                  real     23.93  sim     24.60 s      error    +0.67 ( +2.82 %)
+  altitude (all)       n=   62  RMSE  962.424  MAE  620.115  max|e| 2342.996  bias +543.084  NRMSE 29.62 %
+  altitude (ascent)    n=   25  RMSE  102.317  MAE   93.896  max|e|  179.659  bias  -93.023  NRMSE  3.15 %
+  altitude (descent)   n=   37  RMSE 1242.995  MAE  975.669  max|e| 2342.996  bias +972.886  NRMSE 40.10 %
+  note: simulated altitude compared as: barometric
+  note: landing time not compared (parachute parameters of this flight are not documented)
+  note: real velocity derived from altitude (0.6 s local quadratic fit); not independent data

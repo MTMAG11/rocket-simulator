@@ -1,0 +1,13 @@
+Validation: epfl_bella_lui_2020
+  source: EPFL Rocket Team via RocketPy example data  (quality: university team, altimeter-derived altitude/velocity (filtered), parameters from a secondary source (RocketPy docs); permission to use given by the team (A. Scardigli, 2020))
+  simulation fidelity 3, dt 0.005 s, time shift applied -0.066 s
+
+  Apogee (AGL)                 real    458.97  sim    461.24 m      error    +2.27 ( +0.50 %)
+  Apogee time                  real      9.78  sim      9.68 s      error    -0.10 ( -1.02 %)
+  Max velocity                 real     90.00  sim     84.85 m/s    error    -5.15 ( -5.73 %)
+  Landing time                 real     33.64  sim     34.08 s      error    +0.45 ( +1.33 %)
+  altitude (all)       n=  577  RMSE    3.619  MAE    3.022  max|e|    9.261  bias   +1.347  NRMSE  0.78 %
+  altitude (ascent)    n=  178  RMSE    3.345  MAE    2.939  max|e|    7.372  bias   +1.833  NRMSE  0.73 %
+  altitude (descent)   n=  399  RMSE    3.734  MAE    3.058  max|e|    9.261  bias   +1.130  NRMSE  0.80 %
+  velocity             n=  178  RMSE    3.428  MAE    2.336  max|e|   11.123  bias   -2.321  NRMSE  3.80 %
+  note: simulated altitude compared as: barometric

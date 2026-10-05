@@ -1,0 +1,1078 @@
+{
+ "sensitivity": {
+  "genesis_sim": {
+   "config": "genesis_sim.yaml",
+   "nominal_apogee_m": 2921.589121097342,
+   "rows": [
+    {
+     "path": "motor.thrust_scale",
+     "label": "motor total impulse / thrust",
+     "nominal": 1.0,
+     "delta": 0.03,
+     "sigma": 0.03,
+     "d_apogee_per_delta_m": 104.7995453132055,
+     "d_apogee_per_delta_pct": 3.587073368956243,
+     "sigma_contribution_m": 104.7995453132055,
+     "sigma_contribution_pct": 3.587073368956243,
+     "signed_slope_m_per_unit": 3493.3181771068503,
+     "note": "manufacturer tolerance +-3-10 %",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.surface_roughness_m",
+     "label": "surface roughness",
+     "nominal": 6e-05,
+     "delta": 3e-05,
+     "sigma": 3e-05,
+     "d_apogee_per_delta_m": -102.53089843361658,
+     "d_apogee_per_delta_pct": -3.5094222419306593,
+     "sigma_contribution_m": 102.53089843361658,
+     "sigma_contribution_pct": 3.5094222419306593,
+     "signed_slope_m_per_unit": -3417696.614453886,
+     "note": "paint/finish: factor ~1.5",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.drag_scale",
+     "label": "overall drag level",
+     "nominal": 1.0,
+     "delta": 0.07,
+     "sigma": 0.07,
+     "d_apogee_per_delta_m": -86.23072413798717,
+     "d_apogee_per_delta_pct": -2.9515007266182294,
+     "sigma_contribution_m": 86.23072413798717,
+     "sigma_contribution_pct": 2.9515007266182294,
+     "signed_slope_m_per_unit": -1231.867487685531,
+     "note": "Barrowman-type build-up vs. real surface",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.fins.thickness_m",
+     "label": "fin thickness",
+     "nominal": 0.003,
+     "delta": 0.001,
+     "sigma": 0.001,
+     "d_apogee_per_delta_m": -46.92904829266422,
+     "d_apogee_per_delta_pct": -1.6062850163899087,
+     "sigma_contribution_m": 46.92904829266422,
+     "sigma_contribution_pct": 1.6062850163899087,
+     "signed_slope_m_per_unit": -46929.04829266422,
+     "note": "usually assumed, +-1 mm",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.extra_cd",
+     "label": "protuberance drag (rail buttons, lugs)",
+     "nominal": 0.0,
+     "delta": 0.02,
+     "sigma": 0.02,
+     "d_apogee_per_delta_m": -40.782567900800586,
+     "d_apogee_per_delta_pct": -1.3959036062361416,
+     "sigma_contribution_m": 40.782567900800586,
+     "sigma_contribution_pct": 1.3959036062361416,
+     "signed_slope_m_per_unit": -2039.1283950400293,
+     "note": "0 in the base model",
+     "one_sided": "+"
+    },
+    {
+     "path": "rocket.dry_mass_kg",
+     "label": "airframe mass",
+     "nominal": 9.214,
+     "delta": 0.18428,
+     "sigma": 0.18428,
+     "d_apogee_per_delta_m": -39.06403702515513,
+     "d_apogee_per_delta_pct": -1.3370818210906663,
+     "sigma_contribution_m": 39.06403702515513,
+     "sigma_contribution_pct": 1.3370818210906663,
+     "signed_slope_m_per_unit": -211.98196779441682,
+     "note": "as-built vs. as-reported",
+     "one_sided": null
+    },
+    {
+     "path": "motor.misalignment_deg.0",
+     "label": "thrust misalignment",
+     "nominal": 0.0,
+     "delta": 0.2,
+     "sigma": 0.2,
+     "d_apogee_per_delta_m": -23.34941917247079,
+     "d_apogee_per_delta_pct": -0.7992027011553494,
+     "sigma_contribution_m": 23.34941917247079,
+     "sigma_contribution_pct": 0.7992027011553494,
+     "signed_slope_m_per_unit": -116.74709586235394,
+     "note": "lateral thrust loss",
+     "one_sided": "+"
+    },
+    {
+     "path": "launch.elevation_deg",
+     "label": "launch elevation",
+     "nominal": 84.0,
+     "delta": 1.5,
+     "sigma": 1.5,
+     "d_apogee_per_delta_m": 20.358078593424125,
+     "d_apogee_per_delta_pct": 0.6968152518920141,
+     "sigma_contribution_m": 20.358078593424125,
+     "sigma_contribution_pct": 0.6968152518920141,
+     "signed_slope_m_per_unit": 13.572052395616083,
+     "note": "rail tip-off not modelled",
+     "one_sided": "-"
+    },
+    {
+     "path": "environment.atmosphere.temperature_offset_k",
+     "label": "air temperature offset",
+     "nominal": 8.0,
+     "delta": 4.0,
+     "sigma": 4.0,
+     "d_apogee_per_delta_m": 15.580198699704397,
+     "d_apogee_per_delta_pct": 0.533278228180577,
+     "sigma_contribution_m": 15.580198699704397,
+     "sigma_contribution_pct": 0.533278228180577,
+     "signed_slope_m_per_unit": 3.895049674926099,
+     "note": "density",
+     "one_sided": null
+    },
+    {
+     "path": "environment.wind.speed_ms",
+     "label": "wind speed (constant)",
+     "nominal": 0.0,
+     "delta": 2.0,
+     "sigma": 3.0,
+     "d_apogee_per_delta_m": 9.387118812598146,
+     "d_apogee_per_delta_pct": 0.3213018129350224,
+     "sigma_contribution_m": 14.08067821889722,
+     "sigma_contribution_pct": 0.4819527194025336,
+     "signed_slope_m_per_unit": 4.693559406299073,
+     "note": "drift + weathercocking",
+     "one_sided": "+"
+    },
+    {
+     "path": "environment.atmosphere.sea_level_pressure_pa",
+     "label": "pressure",
+     "nominal": 101325.0,
+     "delta": 600.0,
+     "sigma": 600.0,
+     "d_apogee_per_delta_m": -7.3039826612207435,
+     "d_apogee_per_delta_pct": -0.2500003374354497,
+     "sigma_contribution_m": 7.3039826612207435,
+     "sigma_contribution_pct": 0.2500003374354497,
+     "signed_slope_m_per_unit": -0.012173304435367906,
+     "note": "density",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.nozzle_exit_ratio",
+     "label": "nozzle exit / motor diameter",
+     "nominal": 0.7,
+     "delta": 0.1,
+     "sigma": 0.1,
+     "d_apogee_per_delta_m": 2.3462558635822006,
+     "d_apogee_per_delta_pct": 0.0803075232803767,
+     "sigma_contribution_m": 2.3462558635822006,
+     "sigma_contribution_pct": 0.0803075232803767,
+     "signed_slope_m_per_unit": 23.462558635822006,
+     "note": "base drag while burning",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.cg_from_nose_m",
+     "label": "airframe CG position",
+     "nominal": 1.477,
+     "delta": 0.01,
+     "sigma": 0.01,
+     "d_apogee_per_delta_m": 0.0535306319331994,
+     "d_apogee_per_delta_pct": 0.0018322436767937247,
+     "sigma_contribution_m": 0.0535306319331994,
+     "sigma_contribution_pct": 0.0018322436767937247,
+     "signed_slope_m_per_unit": 5.35306319331994,
+     "note": "stability, not apogee, in first order",
+     "one_sided": null
+    }
+   ],
+   "first_order_rss_m": 189.16218120680918,
+   "first_order_rss_pct": 6.474633268615141
+  },
+  "erebus11_sim": {
+   "config": "erebus11_sim.yaml",
+   "nominal_apogee_m": 2887.7951461379075,
+   "rows": [
+    {
+     "path": "rocket.aero.surface_roughness_m",
+     "label": "surface roughness",
+     "nominal": 6e-05,
+     "delta": 3e-05,
+     "sigma": 3e-05,
+     "d_apogee_per_delta_m": -111.80461028300033,
+     "d_apogee_per_delta_pct": -3.8716253967157637,
+     "sigma_contribution_m": 111.80461028300033,
+     "sigma_contribution_pct": 3.8716253967157637,
+     "signed_slope_m_per_unit": -3726820.3427666775,
+     "note": "paint/finish: factor ~1.5",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.drag_scale",
+     "label": "overall drag level",
+     "nominal": 1.0,
+     "delta": 0.07,
+     "sigma": 0.07,
+     "d_apogee_per_delta_m": -93.96125202089661,
+     "d_apogee_per_delta_pct": -3.253736752988139,
+     "sigma_contribution_m": 93.96125202089661,
+     "sigma_contribution_pct": 3.253736752988139,
+     "signed_slope_m_per_unit": -1342.303600298523,
+     "note": "Barrowman-type build-up vs. real surface",
+     "one_sided": null
+    },
+    {
+     "path": "motor.thrust_scale",
+     "label": "motor total impulse / thrust",
+     "nominal": 1.0,
+     "delta": 0.03,
+     "sigma": 0.03,
+     "d_apogee_per_delta_m": 87.312403698058,
+     "d_apogee_per_delta_pct": 3.0234971415762737,
+     "sigma_contribution_m": 87.312403698058,
+     "sigma_contribution_pct": 3.0234971415762737,
+     "signed_slope_m_per_unit": 2910.413456601934,
+     "note": "manufacturer tolerance +-3-10 %",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.extra_cd",
+     "label": "protuberance drag (rail buttons, lugs)",
+     "nominal": 0.0,
+     "delta": 0.02,
+     "sigma": 0.02,
+     "d_apogee_per_delta_m": -54.47654893873869,
+     "d_apogee_per_delta_pct": -1.8864409067102554,
+     "sigma_contribution_m": 54.47654893873869,
+     "sigma_contribution_pct": 1.8864409067102554,
+     "signed_slope_m_per_unit": -2723.8274469369344,
+     "note": "0 in the base model",
+     "one_sided": "+"
+    },
+    {
+     "path": "rocket.fins.thickness_m",
+     "label": "fin thickness",
+     "nominal": 0.003,
+     "delta": 0.001,
+     "sigma": 0.001,
+     "d_apogee_per_delta_m": -52.458520072453666,
+     "d_apogee_per_delta_pct": -1.8165596040498537,
+     "sigma_contribution_m": 52.458520072453666,
+     "sigma_contribution_pct": 1.8165596040498537,
+     "signed_slope_m_per_unit": -52458.52007245366,
+     "note": "usually assumed, +-1 mm",
+     "one_sided": null
+    },
+    {
+     "path": "motor.misalignment_deg.0",
+     "label": "thrust misalignment",
+     "nominal": 0.0,
+     "delta": 0.2,
+     "sigma": 0.2,
+     "d_apogee_per_delta_m": -31.518890281189215,
+     "d_apogee_per_delta_pct": -1.091451736919154,
+     "sigma_contribution_m": 31.518890281189215,
+     "sigma_contribution_pct": 1.091451736919154,
+     "signed_slope_m_per_unit": -157.59445140594607,
+     "note": "lateral thrust loss",
+     "one_sided": "+"
+    },
+    {
+     "path": "rocket.dry_mass_kg",
+     "label": "airframe mass",
+     "nominal": 5.82,
+     "delta": 0.1164,
+     "sigma": 0.1164,
+     "d_apogee_per_delta_m": -26.46870564809842,
+     "d_apogee_per_delta_pct": -0.9165714432167136,
+     "sigma_contribution_m": 26.46870564809842,
+     "sigma_contribution_pct": 0.9165714432167136,
+     "signed_slope_m_per_unit": -227.3943784200895,
+     "note": "as-built vs. as-reported",
+     "one_sided": null
+    },
+    {
+     "path": "launch.elevation_deg",
+     "label": "launch elevation",
+     "nominal": 84.0,
+     "delta": 1.5,
+     "sigma": 1.5,
+     "d_apogee_per_delta_m": 19.303529693708697,
+     "d_apogee_per_delta_pct": 0.668452182957816,
+     "sigma_contribution_m": 19.303529693708697,
+     "sigma_contribution_pct": 0.668452182957816,
+     "signed_slope_m_per_unit": 12.869019795805798,
+     "note": "rail tip-off not modelled",
+     "one_sided": "-"
+    },
+    {
+     "path": "environment.atmosphere.temperature_offset_k",
+     "label": "air temperature offset",
+     "nominal": 8.0,
+     "delta": 4.0,
+     "sigma": 4.0,
+     "d_apogee_per_delta_m": 18.739859866441293,
+     "d_apogee_per_delta_pct": 0.6489331451195107,
+     "sigma_contribution_m": 18.739859866441293,
+     "sigma_contribution_pct": 0.6489331451195107,
+     "signed_slope_m_per_unit": 4.684964966610323,
+     "note": "density",
+     "one_sided": null
+    },
+    {
+     "path": "environment.wind.speed_ms",
+     "label": "wind speed (constant)",
+     "nominal": 0.0,
+     "delta": 2.0,
+     "sigma": 3.0,
+     "d_apogee_per_delta_m": 8.520970802863758,
+     "d_apogee_per_delta_pct": 0.29506839549403535,
+     "sigma_contribution_m": 12.781456204295637,
+     "sigma_contribution_pct": 0.44260259324105306,
+     "signed_slope_m_per_unit": 4.260485401431879,
+     "note": "drift + weathercocking",
+     "one_sided": "+"
+    },
+    {
+     "path": "environment.atmosphere.sea_level_pressure_pa",
+     "label": "pressure",
+     "nominal": 101325.0,
+     "delta": 600.0,
+     "sigma": 600.0,
+     "d_apogee_per_delta_m": -8.049808006989451,
+     "d_apogee_per_delta_pct": -0.27875273693686825,
+     "sigma_contribution_m": 8.049808006989451,
+     "sigma_contribution_pct": 0.27875273693686825,
+     "signed_slope_m_per_unit": -0.013416346678315752,
+     "note": "density",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.nozzle_exit_ratio",
+     "label": "nozzle exit / motor diameter",
+     "nominal": 0.7,
+     "delta": 0.1,
+     "sigma": 0.1,
+     "d_apogee_per_delta_m": 2.8543469676203586,
+     "d_apogee_per_delta_pct": 0.0988417399148869,
+     "sigma_contribution_m": 2.8543469676203586,
+     "sigma_contribution_pct": 0.0988417399148869,
+     "signed_slope_m_per_unit": 28.543469676203586,
+     "note": "base drag while burning",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.cg_from_nose_m",
+     "label": "airframe CG position",
+     "nominal": 1.1921,
+     "delta": 0.01,
+     "sigma": 0.01,
+     "d_apogee_per_delta_m": 0.04481448241040198,
+     "d_apogee_per_delta_pct": 0.0015518580835048557,
+     "sigma_contribution_m": 0.04481448241040198,
+     "sigma_contribution_pct": 0.0015518580835048557,
+     "signed_slope_m_per_unit": 4.481448241040198,
+     "note": "stability, not apogee, in first order",
+     "one_sided": null
+    }
+   ],
+   "first_order_rss_m": 193.19987080782866,
+   "first_order_rss_pct": 6.690220775050861
+  },
+  "bella_lui_sim": {
+   "config": "bella_lui_sim.yaml",
+   "nominal_apogee_m": 448.4354699493061,
+   "rows": [
+    {
+     "path": "motor.thrust_scale",
+     "label": "motor total impulse / thrust",
+     "nominal": 1.0,
+     "delta": 0.03,
+     "sigma": 0.03,
+     "d_apogee_per_delta_m": 27.00704152685867,
+     "d_apogee_per_delta_pct": 6.022503422825075,
+     "sigma_contribution_m": 27.00704152685867,
+     "sigma_contribution_pct": 6.022503422825075,
+     "signed_slope_m_per_unit": 900.2347175619558,
+     "note": "manufacturer tolerance +-3-10 %",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.dry_mass_kg",
+     "label": "airframe mass",
+     "nominal": 17.345,
+     "delta": 0.3469,
+     "sigma": 0.3469,
+     "d_apogee_per_delta_m": -15.736209440878925,
+     "d_apogee_per_delta_pct": -3.5091357609731095,
+     "sigma_contribution_m": 15.736209440878925,
+     "sigma_contribution_pct": 3.5091357609731095,
+     "signed_slope_m_per_unit": -45.36237947788678,
+     "note": "as-built vs. as-reported",
+     "one_sided": null
+    },
+    {
+     "path": "environment.wind.speed_ms",
+     "label": "wind speed (constant)",
+     "nominal": 1.0,
+     "delta": 2.0,
+     "sigma": 3.0,
+     "d_apogee_per_delta_m": -2.4447518382826274,
+     "d_apogee_per_delta_pct": -0.5451736096074196,
+     "sigma_contribution_m": 3.667127757423941,
+     "sigma_contribution_pct": 0.8177604144111295,
+     "signed_slope_m_per_unit": -1.2223759191413137,
+     "note": "drift + weathercocking",
+     "one_sided": "+"
+    },
+    {
+     "path": "rocket.aero.surface_roughness_m",
+     "label": "surface roughness",
+     "nominal": 6e-05,
+     "delta": 3e-05,
+     "sigma": 3e-05,
+     "d_apogee_per_delta_m": -3.1266788348110026,
+     "d_apogee_per_delta_pct": -0.6972416421842058,
+     "sigma_contribution_m": 3.1266788348110026,
+     "sigma_contribution_pct": 0.6972416421842058,
+     "signed_slope_m_per_unit": -104222.62782703342,
+     "note": "paint/finish: factor ~1.5",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.drag_scale",
+     "label": "overall drag level",
+     "nominal": 1.0,
+     "delta": 0.07,
+     "sigma": 0.07,
+     "d_apogee_per_delta_m": -2.9801386173495814,
+     "d_apogee_per_delta_pct": -0.6645635363515011,
+     "sigma_contribution_m": 2.9801386173495814,
+     "sigma_contribution_pct": 0.6645635363515011,
+     "signed_slope_m_per_unit": -42.57340881927973,
+     "note": "Barrowman-type build-up vs. real surface",
+     "one_sided": null
+    },
+    {
+     "path": "motor.misalignment_deg.0",
+     "label": "thrust misalignment",
+     "nominal": 0.0,
+     "delta": 0.2,
+     "sigma": 0.2,
+     "d_apogee_per_delta_m": -2.3624924412470705,
+     "d_apogee_per_delta_pct": -0.5268299676459895,
+     "sigma_contribution_m": 2.3624924412470705,
+     "sigma_contribution_pct": 0.5268299676459895,
+     "signed_slope_m_per_unit": -11.812462206235352,
+     "note": "lateral thrust loss",
+     "one_sided": "+"
+    },
+    {
+     "path": "rocket.aero.extra_cd",
+     "label": "protuberance drag (rail buttons, lugs)",
+     "nominal": 0.0,
+     "delta": 0.02,
+     "sigma": 0.02,
+     "d_apogee_per_delta_m": -1.9924418192103985,
+     "d_apogee_per_delta_pct": -0.4443095947418335,
+     "sigma_contribution_m": 1.9924418192103985,
+     "sigma_contribution_pct": 0.4443095947418335,
+     "signed_slope_m_per_unit": -99.62209096051993,
+     "note": "0 in the base model",
+     "one_sided": "+"
+    },
+    {
+     "path": "launch.elevation_deg",
+     "label": "launch elevation",
+     "nominal": 89.0,
+     "delta": 1.5,
+     "sigma": 1.5,
+     "d_apogee_per_delta_m": 1.1541598139939424,
+     "d_apogee_per_delta_pct": 0.25737478217867465,
+     "sigma_contribution_m": 1.1541598139939424,
+     "sigma_contribution_pct": 0.25737478217867465,
+     "signed_slope_m_per_unit": 0.7694398759959616,
+     "note": "rail tip-off not modelled",
+     "one_sided": "-"
+    },
+    {
+     "path": "rocket.fins.thickness_m",
+     "label": "fin thickness",
+     "nominal": 0.004,
+     "delta": 0.001,
+     "sigma": 0.001,
+     "d_apogee_per_delta_m": -1.143114739675525,
+     "d_apogee_per_delta_pct": -0.2549117579402784,
+     "sigma_contribution_m": 1.143114739675525,
+     "sigma_contribution_pct": 0.2549117579402784,
+     "signed_slope_m_per_unit": -1143.114739675525,
+     "note": "usually assumed, +-1 mm",
+     "one_sided": null
+    },
+    {
+     "path": "environment.atmosphere.temperature_offset_k",
+     "label": "air temperature offset",
+     "nominal": -8.0,
+     "delta": 4.0,
+     "sigma": 4.0,
+     "d_apogee_per_delta_m": 0.591677467728573,
+     "d_apogee_per_delta_pct": 0.13194261100609633,
+     "sigma_contribution_m": 0.591677467728573,
+     "sigma_contribution_pct": 0.13194261100609633,
+     "signed_slope_m_per_unit": 0.14791936693214325,
+     "note": "density",
+     "one_sided": null
+    },
+    {
+     "path": "environment.atmosphere.sea_level_pressure_pa",
+     "label": "pressure",
+     "nominal": 101325.0,
+     "delta": 600.0,
+     "sigma": 600.0,
+     "d_apogee_per_delta_m": -0.25730877712996403,
+     "d_apogee_per_delta_pct": -0.05737922050614145,
+     "sigma_contribution_m": 0.25730877712996403,
+     "sigma_contribution_pct": 0.05737922050614145,
+     "signed_slope_m_per_unit": -0.0004288479618832734,
+     "note": "density",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.nozzle_exit_ratio",
+     "label": "nozzle exit / motor diameter",
+     "nominal": 0.7,
+     "delta": 0.1,
+     "sigma": 0.1,
+     "d_apogee_per_delta_m": 0.03108269603410463,
+     "d_apogee_per_delta_pct": 0.0069313642914148625,
+     "sigma_contribution_m": 0.03108269603410463,
+     "sigma_contribution_pct": 0.0069313642914148625,
+     "signed_slope_m_per_unit": 0.3108269603410463,
+     "note": "base drag while burning",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.cg_from_nose_m",
+     "label": "airframe CG position",
+     "nominal": 1.503,
+     "delta": 0.01,
+     "sigma": 0.01,
+     "d_apogee_per_delta_m": 0.005745040826440118,
+     "d_apogee_per_delta_pct": 0.0012811298863333832,
+     "sigma_contribution_m": 0.005745040826440118,
+     "sigma_contribution_pct": 0.0012811298863333832,
+     "signed_slope_m_per_unit": 0.5745040826440118,
+     "note": "stability, not apogee, in first order",
+     "one_sided": null
+    }
+   ],
+   "first_order_rss_m": 31.964371299916113,
+   "first_order_rss_pct": 7.127975693700047
+  },
+  "example_g80": {
+   "config": "example_g80.yaml",
+   "nominal_apogee_m": 918.4653338991054,
+   "rows": [
+    {
+     "path": "rocket.fins.thickness_m",
+     "label": "fin thickness",
+     "nominal": 0.002,
+     "delta": 0.001,
+     "sigma": 0.001,
+     "d_apogee_per_delta_m": -46.854165616978094,
+     "d_apogee_per_delta_pct": -5.101353735156332,
+     "sigma_contribution_m": 46.854165616978094,
+     "sigma_contribution_pct": 5.101353735156332,
+     "signed_slope_m_per_unit": -46854.16561697809,
+     "note": "usually assumed, +-1 mm",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.surface_roughness_m",
+     "label": "surface roughness",
+     "nominal": 6e-05,
+     "delta": 3e-05,
+     "sigma": 3e-05,
+     "d_apogee_per_delta_m": -41.34359004444809,
+     "d_apogee_per_delta_pct": -4.501377299558454,
+     "sigma_contribution_m": 41.34359004444809,
+     "sigma_contribution_pct": 4.501377299558454,
+     "signed_slope_m_per_unit": -1378119.6681482696,
+     "note": "paint/finish: factor ~1.5",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.drag_scale",
+     "label": "overall drag level",
+     "nominal": 1.0,
+     "delta": 0.07,
+     "sigma": 0.07,
+     "d_apogee_per_delta_m": -34.80148812868225,
+     "d_apogee_per_delta_pct": -3.7890910896921493,
+     "sigma_contribution_m": 34.80148812868225,
+     "sigma_contribution_pct": 3.7890910896921493,
+     "signed_slope_m_per_unit": -497.1641161240321,
+     "note": "Barrowman-type build-up vs. real surface",
+     "one_sided": null
+    },
+    {
+     "path": "motor.thrust_scale",
+     "label": "motor total impulse / thrust",
+     "nominal": 1.0,
+     "delta": 0.03,
+     "sigma": 0.03,
+     "d_apogee_per_delta_m": 23.98234863127277,
+     "d_apogee_per_delta_pct": 2.6111326956088754,
+     "sigma_contribution_m": 23.98234863127277,
+     "sigma_contribution_pct": 2.6111326956088754,
+     "signed_slope_m_per_unit": 799.4116210424257,
+     "note": "manufacturer tolerance +-3-10 %",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.aero.extra_cd",
+     "label": "protuberance drag (rail buttons, lugs)",
+     "nominal": 0.0,
+     "delta": 0.02,
+     "sigma": 0.02,
+     "d_apogee_per_delta_m": -12.397725997483008,
+     "d_apogee_per_delta_pct": -1.349830585859097,
+     "sigma_contribution_m": 12.397725997483008,
+     "sigma_contribution_pct": 1.349830585859097,
+     "signed_slope_m_per_unit": -619.8862998741504,
+     "note": "0 in the base model",
+     "one_sided": "+"
+    },
+    {
+     "path": "environment.wind.speed_ms",
+     "label": "wind speed (constant)",
+     "nominal": 3.0,
+     "delta": 2.0,
+     "sigma": 3.0,
+     "d_apogee_per_delta_m": -6.489514303658098,
+     "d_apogee_per_delta_pct": -0.7065606141179607,
+     "sigma_contribution_m": 9.734271455487146,
+     "sigma_contribution_pct": 1.059840921176941,
+     "signed_slope_m_per_unit": -3.244757151829049,
+     "note": "drift + weathercocking",
+     "one_sided": "+"
+    },
+    {
+     "path": "environment.atmosphere.temperature_offset_k",
+     "label": "air temperature offset",
+     "nominal": 0.0,
+     "delta": 4.0,
+     "sigma": 4.0,
+     "d_apogee_per_delta_m": 8.187083688477514,
+     "d_apogee_per_delta_pct": 0.8913873378020031,
+     "sigma_contribution_m": 8.187083688477514,
+     "sigma_contribution_pct": 0.8913873378020031,
+     "signed_slope_m_per_unit": 2.0467709221193786,
+     "note": "density",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.dry_mass_kg",
+     "label": "airframe mass",
+     "nominal": 0.45,
+     "delta": 0.009000000000000001,
+     "sigma": 0.009000000000000001,
+     "d_apogee_per_delta_m": -4.518137565575671,
+     "d_apogee_per_delta_pct": -0.4919224927515875,
+     "sigma_contribution_m": 4.518137565575671,
+     "sigma_contribution_pct": 0.4919224927515875,
+     "signed_slope_m_per_unit": -502.0152850639634,
+     "note": "as-built vs. as-reported",
+     "one_sided": null
+    },
+    {
+     "path": "environment.atmosphere.sea_level_pressure_pa",
+     "label": "pressure",
+     "nominal": 101325.0,
+     "delta": 600.0,
+     "sigma": 600.0,
+     "d_apogee_per_delta_m": -3.3066612981496633,
+     "d_apogee_per_delta_pct": -0.3600202616371043,
+     "sigma_contribution_m": 3.3066612981496633,
+     "sigma_contribution_pct": 0.3600202616371043,
+     "signed_slope_m_per_unit": -0.005511102163582772,
+     "note": "density",
+     "one_sided": null
+    },
+    {
+     "path": "motor.misalignment_deg.0",
+     "label": "thrust misalignment",
+     "nominal": 0.0,
+     "delta": 0.2,
+     "sigma": 0.2,
+     "d_apogee_per_delta_m": -0.786383226442922,
+     "d_apogee_per_delta_pct": -0.08561926045749998,
+     "sigma_contribution_m": 0.786383226442922,
+     "sigma_contribution_pct": 0.08561926045749998,
+     "signed_slope_m_per_unit": -3.93191613221461,
+     "note": "lateral thrust loss",
+     "one_sided": "+"
+    },
+    {
+     "path": "launch.elevation_deg",
+     "label": "launch elevation",
+     "nominal": 90.0,
+     "delta": 1.5,
+     "sigma": 1.5,
+     "d_apogee_per_delta_m": 0.5974138128694904,
+     "d_apogee_per_delta_pct": 0.06504478621237947,
+     "sigma_contribution_m": 0.5974138128694904,
+     "sigma_contribution_pct": 0.06504478621237947,
+     "signed_slope_m_per_unit": 0.3982758752463269,
+     "note": "rail tip-off not modelled",
+     "one_sided": "-"
+    },
+    {
+     "path": "rocket.aero.nozzle_exit_ratio",
+     "label": "nozzle exit / motor diameter",
+     "nominal": 0.7,
+     "delta": 0.1,
+     "sigma": 0.1,
+     "d_apogee_per_delta_m": 0.4216519316570384,
+     "d_apogee_per_delta_pct": 0.04590831206084011,
+     "sigma_contribution_m": 0.4216519316570384,
+     "sigma_contribution_pct": 0.04590831206084011,
+     "signed_slope_m_per_unit": 4.216519316570384,
+     "note": "base drag while burning",
+     "one_sided": null
+    },
+    {
+     "path": "rocket.cg_from_nose_m",
+     "label": "airframe CG position",
+     "nominal": 0.6,
+     "delta": 0.01,
+     "sigma": 0.01,
+     "d_apogee_per_delta_m": 0.13379695652594137,
+     "d_apogee_per_delta_pct": 0.014567447631141529,
+     "sigma_contribution_m": 0.13379695652594137,
+     "sigma_contribution_pct": 0.014567447631141529,
+     "signed_slope_m_per_unit": 13.379695652594137,
+     "note": "stability, not apogee, in first order",
+     "one_sided": null
+    }
+   ],
+   "first_order_rss_m": 77.71041407103083,
+   "first_order_rss_pct": 8.460897891609202
+  }
+ },
+ "model_form": {
+  "genesis_sim": {
+   "config": "genesis_sim.yaml",
+   "nominal_apogee_m": 2921.589121097342,
+   "cases": [
+    {
+     "case": "aero: simplified (flat Cd = 0.599, coast average M 0.2-0.8)",
+     "apogee_m": 2909.567418399504,
+     "delta_m": -12.021702697838009,
+     "delta_pct": -0.4114782126968862
+    },
+    {
+     "case": "aero: enhanced (Mach-dependent fin lift/stall)",
+     "apogee_m": 2921.571886097752,
+     "delta_m": -0.017234999589618383,
+     "delta_pct": -0.0005899186666996131
+    },
+    {
+     "case": "fidelity 2 (3-DOF point mass) instead of 6-DOF",
+     "apogee_m": 2918.111233538156,
+     "delta_m": -3.4778875591860015,
+     "delta_pct": -0.119040953913455
+    },
+    {
+     "case": "gravity: constant g0 instead of inverse-square",
+     "apogee_m": 2923.096064522809,
+     "delta_m": 1.5069434254669432,
+     "delta_pct": 0.05157958094055809
+    },
+    {
+     "case": "time step 0.001 s instead of the run's dt",
+     "apogee_m": 2921.5851663155463,
+     "delta_m": -0.003954781795528106,
+     "delta_pct": -0.00013536406495252487
+    },
+    {
+     "case": "roughness x2 (60 -> 120 um)",
+     "apogee_m": 2783.9099796012156,
+     "delta_m": -137.67914149612625,
+     "delta_pct": -4.712474471578478
+    },
+    {
+     "case": "mass convention: casing (1.59 kg) added on top of the reported mass",
+     "apogee_m": 2559.732766979159,
+     "delta_m": -361.85635411818294,
+     "delta_pct": -12.385600408529402
+    }
+   ]
+  },
+  "erebus11_sim": {
+   "config": "erebus11_sim.yaml",
+   "nominal_apogee_m": 2887.7951461379075,
+   "cases": [
+    {
+     "case": "aero: simplified (flat Cd = 0.472, coast average M 0.2-0.8)",
+     "apogee_m": 2913.7964071281112,
+     "delta_m": 26.00126099020372,
+     "delta_pct": 0.9003845381822669
+    },
+    {
+     "case": "aero: enhanced (Mach-dependent fin lift/stall)",
+     "apogee_m": 2887.7708391757023,
+     "delta_m": -0.024306962205173477,
+     "delta_pct": -0.0008417135210467138
+    },
+    {
+     "case": "fidelity 2 (3-DOF point mass) instead of 6-DOF",
+     "apogee_m": 2885.369945715373,
+     "delta_m": -2.4252004225345445,
+     "delta_pct": -0.0839810408912824
+    },
+    {
+     "case": "gravity: constant g0 instead of inverse-square",
+     "apogee_m": 2889.0732470884395,
+     "delta_m": 1.2781009505320071,
+     "delta_pct": 0.044258712472777705
+    },
+    {
+     "case": "time step 0.001 s instead of the run's dt",
+     "apogee_m": 2887.8008599544432,
+     "delta_m": 0.005713816535717342,
+     "delta_pct": 0.0001978608677751575
+    },
+    {
+     "case": "roughness x2 (60 -> 120 um)",
+     "apogee_m": 2738.8985348769984,
+     "delta_m": -148.89661126090914,
+     "delta_pct": -5.156065569957106
+    }
+   ]
+  },
+  "bella_lui_sim": {
+   "config": "bella_lui_sim.yaml",
+   "nominal_apogee_m": 448.4354699493061,
+   "cases": [
+    {
+     "case": "aero: simplified (flat Cd = 0.423, coast average M 0.2-0.8)",
+     "apogee_m": 448.5712713560635,
+     "delta_m": 0.13580140675742314,
+     "delta_pct": 0.030283377622375627
+    },
+    {
+     "case": "aero: enhanced (Mach-dependent fin lift/stall)",
+     "apogee_m": 448.43521764207924,
+     "delta_m": -0.0002523072268445503,
+     "delta_pct": -5.6263887170449e-05
+    },
+    {
+     "case": "fidelity 2 (3-DOF point mass) instead of 6-DOF",
+     "apogee_m": 446.32776259464646,
+     "delta_m": -2.107707354659624,
+     "delta_pct": -0.4700135238851405
+    },
+    {
+     "case": "gravity: constant g0 instead of inverse-square",
+     "apogee_m": 449.0266915776152,
+     "delta_m": 0.5912216283091425,
+     "delta_pct": 0.1318409599436855
+    },
+    {
+     "case": "time step 0.001 s instead of the run's dt",
+     "apogee_m": 448.4384746155187,
+     "delta_m": 0.003004666212632401,
+     "delta_pct": 0.0006700331293980976
+    },
+    {
+     "case": "roughness x2 (60 -> 120 um)",
+     "apogee_m": 443.9598089520954,
+     "delta_m": -4.475660997210696,
+     "delta_pct": -0.9980613259064124
+    }
+   ]
+  },
+  "ndrt_2020_sim": {
+   "config": "ndrt_2020_sim.yaml",
+   "nominal_apogee_m": 1435.0249756970857,
+   "cases": [
+    {
+     "case": "aero: simplified (flat Cd = 0.328, coast average M 0.2-0.8)",
+     "apogee_m": 1435.0051968160428,
+     "delta_m": -0.019778881042839203,
+     "delta_pct": -0.0013782952476650314
+    },
+    {
+     "case": "aero: enhanced (Mach-dependent fin lift/stall)",
+     "apogee_m": 1435.1799003043845,
+     "delta_m": 0.1549246072988808,
+     "delta_pct": 0.010795951981506369
+    },
+    {
+     "case": "fidelity 2 (3-DOF point mass) instead of 6-DOF",
+     "apogee_m": 1388.0485927357065,
+     "delta_m": -46.97638296137916,
+     "delta_pct": -3.273558562181794
+    },
+    {
+     "case": "gravity: constant g0 instead of inverse-square",
+     "apogee_m": 1436.2860579544833,
+     "delta_m": 1.2610822573976748,
+     "delta_pct": 0.08787876718208926
+    },
+    {
+     "case": "time step 0.001 s instead of the run's dt",
+     "apogee_m": 1435.033135643931,
+     "delta_m": 0.008159946845353261,
+     "delta_pct": 0.0005686275140535055
+    },
+    {
+     "case": "roughness x2 (60 -> 120 um)",
+     "apogee_m": 1396.1894825706343,
+     "delta_m": -38.83549312645141,
+     "delta_pct": -2.706259039678837
+    }
+   ]
+  },
+  "prometheus_sim": {
+   "config": "prometheus_sim.yaml",
+   "nominal_apogee_m": 3904.8557470962714,
+   "cases": [
+    {
+     "case": "aero: simplified (flat Cd = 0.362, coast average M 0.2-0.8)",
+     "apogee_m": 4007.359812069823,
+     "delta_m": 102.50406497355152,
+     "delta_pct": 2.625041015913983
+    },
+    {
+     "case": "aero: enhanced (Mach-dependent fin lift/stall)",
+     "apogee_m": 3904.4091816917853,
+     "delta_m": -0.4465654044861367,
+     "delta_pct": -0.011436156247723405
+    },
+    {
+     "case": "fidelity 2 (3-DOF point mass) instead of 6-DOF",
+     "apogee_m": 3878.412066347721,
+     "delta_m": -26.443680748550378,
+     "delta_pct": -0.6771999392862188
+    },
+    {
+     "case": "gravity: constant g0 instead of inverse-square",
+     "apogee_m": 3905.5922718733855,
+     "delta_m": 0.7365247771140275,
+     "delta_pct": 0.018861766600769363
+    },
+    {
+     "case": "time step 0.001 s instead of the run's dt",
+     "apogee_m": 3904.8339369445757,
+     "delta_m": -0.02181015169571765,
+     "delta_pct": -0.0005585392421201759
+    },
+    {
+     "case": "roughness x2 (60 -> 120 um)",
+     "apogee_m": 3775.9225403408004,
+     "delta_m": -128.93320675547102,
+     "delta_pct": -3.301868624759015
+    }
+   ]
+  },
+  "cavour_sim": {
+   "config": "cavour_sim.yaml",
+   "nominal_apogee_m": 2995.990543514636,
+   "cases": [
+    {
+     "case": "aero: simplified (flat Cd = 0.526, coast average M 0.2-0.8)",
+     "apogee_m": 3018.019536719413,
+     "delta_m": 22.028993204776725,
+     "delta_pct": 0.7352824678456502
+    },
+    {
+     "case": "aero: enhanced (Mach-dependent fin lift/stall)",
+     "apogee_m": 2995.954249947244,
+     "delta_m": -0.03629356739202194,
+     "delta_pct": -0.0012114046044165907
+    },
+    {
+     "case": "fidelity 2 (3-DOF point mass) instead of 6-DOF",
+     "apogee_m": 2993.4560744387554,
+     "delta_m": -2.534469075880679,
+     "delta_pct": -0.08459536300496663
+    },
+    {
+     "case": "gravity: constant g0 instead of inverse-square",
+     "apogee_m": 2997.2409973156646,
+     "delta_m": 1.2504538010284705,
+     "delta_pct": 0.041737575031246484
+    },
+    {
+     "case": "time step 0.001 s instead of the run's dt",
+     "apogee_m": 2995.9822440270964,
+     "delta_m": -0.00829948753971621,
+     "delta_pct": -0.0002770198176253244
+    },
+    {
+     "case": "roughness x2 (60 -> 120 um)",
+     "apogee_m": 2844.832555255935,
+     "delta_m": -151.15798825870115,
+     "delta_pct": -5.0453426358741345
+    },
+    {
+     "case": "mass convention: casing (1.59 kg) added on top of the reported mass",
+     "apogee_m": 2707.035194045879,
+     "delta_m": -288.95534946875705,
+     "delta_pct": -9.644735030764807
+    }
+   ]
+  },
+  "astra_sim": {
+   "config": "astra_sim.yaml",
+   "nominal_apogee_m": 3308.508731079526,
+   "cases": [
+    {
+     "case": "aero: simplified (flat Cd = 0.553, coast average M 0.2-0.8)",
+     "apogee_m": 3336.34319842571,
+     "delta_m": 27.83446734618383,
+     "delta_pct": 0.8412994980098415
+    },
+    {
+     "case": "aero: enhanced (Mach-dependent fin lift/stall)",
+     "apogee_m": 3308.4736728084886,
+     "delta_m": -0.035058271037542,
+     "delta_pct": -0.0010596396711367575
+    },
+    {
+     "case": "fidelity 2 (3-DOF point mass) instead of 6-DOF",
+     "apogee_m": 3305.4627856985176,
+     "delta_m": -3.0459453810085506,
+     "delta_pct": -0.09206399706295156
+    },
+    {
+     "case": "gravity: constant g0 instead of inverse-square",
+     "apogee_m": 3310.0878060319105,
+     "delta_m": 1.579074952384417,
+     "delta_pct": 0.04772769488412938
+    },
+    {
+     "case": "time step 0.001 s instead of the run's dt",
+     "apogee_m": 3308.498527337516,
+     "delta_m": -0.010203742010162387,
+     "delta_pct": -0.0003084091002786331
+    },
+    {
+     "case": "roughness x2 (60 -> 120 um)",
+     "apogee_m": 3170.5204569763623,
+     "delta_m": -137.9882741031638,
+     "delta_pct": -4.170709081312895
+    },
+    {
+     "case": "mass convention: casing (1.54 kg) added on top of the reported mass",
+     "apogee_m": 2973.3856220870016,
+     "delta_m": -335.1231089925245,
+     "delta_pct": -10.129128747475843
+    }
+   ]
+  }
+ }
+}

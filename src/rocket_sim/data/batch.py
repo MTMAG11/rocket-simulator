@@ -40,7 +40,7 @@ import pyarrow.parquet as pq
 from ..config import config_from_dict, config_hash, config_to_dict, from_dict, read_mapping
 from ..errors import ConfigError, RocketSimError
 from ..simulation import Simulation
-from ..version import CONFIG_VERSION, PHYSICS_VERSION, SCHEMA_VERSION, SIM_VERSION
+from ..version import CONFIG_VERSION, DATASET_VERSION, PHYSICS_VERSION, SCHEMA_VERSION, SIM_VERSION
 from .dataset import build_tabular, build_windows, required_columns
 from .export import _arrow_table
 from .montecarlo import check_seed_disjointness, derive_seeds, sample_run
@@ -170,7 +170,7 @@ def execute_chunk(task: dict[str, Any]) -> dict[str, Any]:
         }
         draws: dict[str, Any] = {}
         try:
-            draws = sample_run(params, base_full, seeds)
+            draws = sample_run(params, base_full, seeds, spec.correlations or None)
             from ..config import apply_overrides
 
             cfg = config_from_dict(apply_overrides(base_full, draws), base_dir=base_dir)
@@ -431,12 +431,14 @@ def _finalize(
                     "bytes": p.stat().st_size,
                 }
             )
+    dataset_id = f"{spec.name}-{h}"
     for r in rows:
         r["sim_version"], r["physics_version"], r["schema_version"] = (
             SIM_VERSION,
             PHYSICS_VERSION,
             SCHEMA_VERSION,
         )
+        r["dataset_id"], r["dataset_version"] = dataset_id, DATASET_VERSION  # per-row traceability
     pq.write_table(_rows_to_table(rows), out / "runs.parquet", compression="zstd")
     with (out / "rejected.jsonl").open("w", encoding="utf-8") as f:
         for r in rejected:
@@ -444,13 +446,35 @@ def _finalize(
 
     # leakage report: identical parameter vectors appearing in more than one split
     pkeys = sorted({k for r in rows for k in r if k.startswith("param.")})
-    leakage = {"duplicate_parameter_vectors_across_splits": 0}
+    leakage: dict[str, Any] = {"duplicate_parameter_vectors_across_splits": 0}
     if pkeys and len({r["split"] for r in rows}) > 1:
         seen: dict[tuple, set[str]] = {}
         for r in rows:
             key = tuple(round(v, 12) if isinstance(v, float) else v for v in (r.get(k) for k in pkeys))
             seen.setdefault(key, set()).add(r["split"])
         leakage["duplicate_parameter_vectors_across_splits"] = sum(1 for v in seen.values() if len(v) > 1)
+    from .leakage import (
+        check_run_disjoint,
+        dataset_statistics,
+        near_duplicate_report,
+        parameter_distribution_checks,
+        statistics_markdown,
+    )
+
+    leakage["near_duplicates"] = near_duplicate_report(rows)
+    # a split whose own parameter list is shorter than the global one makes the other parameters NOMINAL there
+    split_warnings: list[str] = []
+    glob = {p.path for p in spec.parameters}
+    for sname, sp in spec.split_table().items():
+        if sp.parameters is not None and glob - {p.path for p in sp.parameters}:
+            dropped = sorted(glob - {p.path for p in sp.parameters})
+            split_warnings.append(
+                f"SPLIT '{sname}' replaces the global parameter list and does not randomise {len(dropped)} global "
+                f"parameter(s) ({', '.join(dropped[:4])}{'...' if len(dropped) > 4 else ''}): they stay nominal there, "
+                "which confounds a distribution-shift comparison"
+            )
+    leakage["run_disjointness"] = check_run_disjoint(rows)
+    leakage["input_resampling"] = "zero-order hold for every input column (no value from after the grid time)"
     splits = spec.split_table()
     seed_info = {
         "master_seed": spec.master_seed,
@@ -471,7 +495,7 @@ def _finalize(
         if not r["accepted"]:
             key = r["reject_reason"].split(";")[0][:80]
             reasons[key] = reasons.get(key, 0) + 1
-    alarms: list[str] = []
+    alarms: list[str] = list(split_warnings)
     n_rej = sum(reasons.values())
     if rows and n_rej / len(rows) > 0.05:
         alarms.append(
@@ -480,8 +504,32 @@ def _finalize(
         )
     ds = spec.dataset
     fid = int(base_full["fidelity"])
+    stats = dataset_statistics(rows)
+    base_dict_for_checks = base_full
+    dist_checks = parameter_distribution_checks(
+        [r for r in rows if r["split"] == "train"] or rows, spec.parameters, base_dict_for_checks
+    )
+    for c in dist_checks:
+        if c["flag"]:
+            alarms.append(
+                f"SAMPLER CHECK: {c['parameter']} deviates from its declared {c['dist']} distribution (KS p={c['ks_p_value']:.2g})"
+            )
+    nd = leakage["near_duplicates"].get("splits", {})
+    for sname, v in nd.items():
+        if v["n_near_duplicates"]:
+            alarms.append(
+                f"LEAKAGE: {v['n_near_duplicates']} run(s) in split '{sname}' are near-duplicates of training runs"
+            )
+    (out / "dataset_report.md").write_text(
+        statistics_markdown(stats, leakage, dist_checks, reasons), encoding="utf-8"
+    )
+    est_on = (base_full["estimator"]["type"] == "truth" and fid >= 3) or (
+        base_full["estimator"]["type"] == "nav_kf" and fid >= 5
+    )
+    n_fins = int((base_full.get("rocket", {}).get("control_surfaces") or {}).get("count", 0))
     manifest: dict[str, Any] = {
-        "dataset_id": f"{spec.name}-{h}",
+        "dataset_id": dataset_id,
+        "dataset_version": DATASET_VERSION,
         "name": spec.name,
         "created_utc": _now(),
         "uuid": str(uuid.uuid4()),
@@ -491,6 +539,7 @@ def _finalize(
             "physics": PHYSICS_VERSION,
             "schema": SCHEMA_VERSION,
             "config": CONFIG_VERSION,
+            "dataset": DATASET_VERSION,
         },
         "fidelity_level": fid,
         "fast_mode": bool(base_full.get("fast", False)),
@@ -513,6 +562,9 @@ def _finalize(
         },
         "seeds": seed_info,
         "leakage_checks": leakage,
+        "statistics": stats,
+        "sampler_checks": dist_checks,
+        "statistics_report": "dataset_report.md",
         "rejection_reasons": reasons,
         "warnings": alarms,
         "feature_schema": [
@@ -522,9 +574,7 @@ def _finalize(
         "window": asdict(ds.window) if ds.kind == "windowed" else None,
         "sample_dt_s": ds.sample_dt_s,
         "trim": ds.trim,
-        "telemetry_columns": [
-            c.name for c in columns_for(fid, base_full["estimator"]["type"] != "none" and fid >= 5)
-        ]
+        "telemetry_columns": [c.name for c in columns_for(fid, est_on, n_fins)]
         if ds.kind == "telemetry"
         else None,
         "telemetry_schema": schema_dict() if ds.kind == "telemetry" else None,

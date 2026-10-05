@@ -1,0 +1,31 @@
+# Genesis, EuRoC 2023 (Cesaroni L995), team flight computer (Faraday)
+# Reconstructed from the RocketPy example notebook genesis.ipynb (EuRoC, Portugal). INPUT CONVENTIONS (fixed BEFORE any
+# comparison was run; see validation_data/registry.yaml): RocketPy 'mass' = rocket mass INCLUDING the empty motor
+# casing, so the motor .eng used here is a derived copy with total weight = propellant weight. Nose 'vonKarman'
+# is approximated as a tangent ogive (same treatment as the Prometheus flight). Fin sweep = root - tip (RocketPy
+# default for trapezoidal fins). Fin thickness (3 mm), wind (none), atmosphere (ISA +8 K, a climatological
+# offset for a warm Portuguese afternoon) and launch angle (84 deg, the RocketPy example value) are NOT measured.
+config_version: 1
+name: genesis_sim
+fidelity: 3
+simulation: {dt_s: 0.005, descent_dt_s: 0.05, t_max_s: 400}
+rocket:
+  name: Genesis
+  body_diameter_m: 0.094
+  body_length_m: 2.372
+  nose: {shape: ogive, length_m: 0.27}
+  fins: {count: 4, root_chord_m: 0.2, tip_chord_m: 0.11, span_m: 0.105, sweep_m: 0.09, thickness_m: 0.003, position_from_nose_m: 2.1220}
+  dry_mass_kg: 9.214
+  cg_from_nose_m: 1.4770
+  inertia: {ixx_kgm2: 0.042241, iyy_kgm2: 7.5046}
+  motor_aft_from_nose_m: 2.372
+  parachutes:
+  - {cd: 1.5, diameter_m: 0.492, trigger: apogee, delay_s: 1.0}
+  - {cd: 2.2, diameter_m: 0.798, trigger: altitude, altitude_m: 870.0, delay_s: 1.0}
+motor: {file: raw/Cesaroni_3618L995-P_nocasing.eng}
+environment:
+  atmosphere: {model: isa, temperature_offset_k: 8.0}
+  gravity: {model: inverse_square}
+  wind: {model: none}
+  site_elevation_msl_m: 160.0
+launch: {elevation_deg: 84.0, azimuth_deg: 133.0, rail_length_m: 12.0}

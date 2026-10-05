@@ -103,7 +103,7 @@ def resample(
     grid = t0 + dt * np.arange(n)
     out = []
     for v, causal in zip(values, causal_flags or [False] * len(values)):
-        if causal:  # measured/estimated channels: zero-order hold (no interpolation toward the future)
+        if causal:  # inputs: zero-order hold (no interpolation toward the future)
             out.append(v[np.clip(np.searchsorted(t, grid, side="right") - 1, 0, len(t) - 1)])
         else:
             out.append(np.interp(grid, t, v))
@@ -123,9 +123,9 @@ def build_tabular(rec: FlightRecord, section: DatasetSection) -> TabularData:
     t0, t1 = flight_slice(rec, section.trim)
     cols_in = [_native_values(rec, f) for f in section.inputs]
     cols_out = [_native_values(rec, f) for f in section.targets]
-    causal = [bool(f.column and f.column.startswith(("meas_", "est_"))) for f in section.inputs] + [
-        False
-    ] * len(cols_out)
+    # EVERY input is zero-order-held (value of the latest native sample at or before the grid time): interpolating a
+    # truth input would read the sample AFTER the grid time. Targets are labels and may be interpolated.
+    causal = [True] * len(cols_in) + [False] * len(cols_out)
     grid, rs = resample(rec, cols_in + cols_out, t0, t1, section.sample_dt_s, causal)
     n_in = len(cols_in)
     xs = [_lagged(rs[i], section.inputs[i].lag) for i in range(n_in)]

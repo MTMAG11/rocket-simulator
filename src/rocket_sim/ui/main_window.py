@@ -264,7 +264,14 @@ class MainWindow(QtWidgets.QMainWindow):
             self.motor_box.addItem(Path(d["motor"]["file"]).stem, d["motor"]["file"])
             idx = self.motor_box.count() - 1
         self.motor_box.setCurrentIndex(idx)
-        self.dry_mass.setValue(d["rocket"]["dry_mass_kg"])
+        dm = d["rocket"].get("dry_mass_kg")
+        # component-based airframes carry their mass in the sections / mass items: nothing to edit here
+        self.dry_mass.setEnabled(dm is not None)
+        self.dry_mass.setToolTip(
+            "" if dm is not None else "airframe mass is computed from the component masses in the config"
+        )
+        if dm is not None:
+            self.dry_mass.setValue(dm)
         self.thrust_scale.setValue(d["motor"]["thrust_scale"])
         self.elevation.setValue(d["launch"]["elevation_deg"])
         self.azimuth.setValue(d["launch"]["azimuth_deg"])
@@ -298,7 +305,6 @@ class MainWindow(QtWidgets.QMainWindow):
         d = copy.deepcopy(self.base_dict)
         ov: dict[str, Any] = {
             "motor.file": self.motor_box.currentData(),
-            "rocket.dry_mass_kg": self.dry_mass.value(),
             "motor.thrust_scale": self.thrust_scale.value(),
             "launch.elevation_deg": self.elevation.value(),
             "launch.azimuth_deg": self.azimuth.value(),
@@ -308,6 +314,8 @@ class MainWindow(QtWidgets.QMainWindow):
             "simulation.dt_s": self.dt.value(),
             "simulation.integrator": self.integrator.currentText(),
         }
+        if self.dry_mass.isEnabled():
+            ov["rocket.dry_mass_kg"] = self.dry_mass.value()
         if self.wind_speed.value() > 0:
             ov.update(
                 {

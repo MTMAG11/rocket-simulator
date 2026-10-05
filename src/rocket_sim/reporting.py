@@ -54,7 +54,7 @@ def summary_text(rec: FlightRecord) -> str:
         lines.append("")
         lines.append("  " + provisional_note())
         lines.append(
-            "  uncertainties are extrapolated from 3 validated 20 kg-class flights (docs/validation.md); "
+            "  uncertainties are extrapolated from 7 compared 7-24 kg flights (3 in-sample) (docs/validation.md); "
             "this vehicle itself is not validated"
         )
     for w in m.warnings:

@@ -1,0 +1,11 @@
+sens genesis_sim 2922 RSS 6.5%
+sens erebus11_sim 2888 RSS 6.7%
+sens bella_lui_sim 448 RSS 7.1%
+sens example_g80 918 RSS 8.5%
+form genesis_sim
+form erebus11_sim
+form bella_lui_sim
+form ndrt_2020_sim
+form prometheus_sim
+form cavour_sim
+form astra_sim

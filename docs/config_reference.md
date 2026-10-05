@@ -31,6 +31,7 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `t_max_s` | `float` | 900.0 |
 | `integrator` | `str` | 'rk4' |
 | `descent_dt_s` | `float \| None` | None |
+| `stop_after_apogee_s` | `float \| None` | None |
 | `record_every` | `int` | 1 |
 | `seed` | `int \| None` | None |
 
@@ -43,8 +44,12 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `body_length_m` | `float` | 0.9 |
 | `nose` | `NoseCfg` | (section) |
 | `fins` | `FinsCfg` | (section) |
-| `dry_mass_kg` | `float` | 0.35 |
-| `cg_from_nose_m` | `float` | 0.55 |
+| `sections` | `list[SectionCfg] \| None` | None |
+| `reference_diameter_m` | `float \| None` | None |
+| `dry_mass_kg` | `float \| None` | None |
+| `cg_from_nose_m` | `float \| None` | None |
+| `masses` | `list[MassItemCfg]` | [] |
+| `control_surfaces` | `ControlSurfaceCfg \| None` | None |
 | `inertia` | `InertiaCfg \| None` | None |
 | `payload` | `PayloadCfg \| None` | None |
 | `motor_aft_from_nose_m` | `float \| None` | None |
@@ -69,6 +74,37 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `sweep_m` | `float` | 0.03 |
 | `thickness_m` | `float` | 0.002 |
 | `position_from_nose_m` | `float` | 0.0 |
+| `mass_kg` | `float` | 0.0 |
+
+### `rocket.masses`
+
+| key | type | default |
+|---|---|---|
+| `name` | `str` | 'payload' |
+| `mass_kg` | `float` | 0.0 |
+| `position_from_nose_m` | `float` | 0.0 |
+| `offset_y_m` | `float` | 0.0 |
+| `offset_z_m` | `float` | 0.0 |
+| `ixx_kgm2` | `float` | 0.0 |
+| `iyy_kgm2` | `float` | 0.0 |
+
+### `rocket.control_surfaces`
+
+| key | type | default |
+|---|---|---|
+| `count` | `int` | 4 |
+| `root_chord_m` | `float` | 0.05 |
+| `tip_chord_m` | `float` | 0.03 |
+| `span_m` | `float` | 0.04 |
+| `sweep_m` | `float` | 0.0 |
+| `thickness_m` | `float` | 0.002 |
+| `position_from_nose_m` | `float` | 0.0 |
+| `roll_angle0_deg` | `float` | 0.0 |
+| `max_deflection_deg` | `float` | 10.0 |
+| `max_rate_deg_s` | `float` | 200.0 |
+| `time_constant_s` | `float` | 0.0 |
+| `delay_s` | `float` | 0.0 |
+| `mass_kg` | `float` | 0.0 |
 
 ### `rocket.inertia`
 
@@ -88,7 +124,7 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 
 | key | type | default |
 |---|---|---|
-| `model` | `str` | 'buildup' |
+| `model` | `str` | 'barrowman' |
 | `cd` | `float \| None` | None |
 | `cd_table` | `list[list[float]] \| None` | None |
 | `cd_powered_table` | `list[list[float]] \| None` | None |
@@ -99,6 +135,9 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `surface_roughness_m` | `float` | 6e-05 |
 | `crossflow_cd` | `float` | 1.2 |
 | `nozzle_exit_ratio` | `float` | 0.7 |
+| `stall_angle_deg` | `float` | 18.0 |
+| `table2d_file` | `str \| None` | None |
+| `x_cm_ref_from_nose_m` | `float \| None` | None |
 
 ### `rocket.parachutes`
 
@@ -218,6 +257,7 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `barometer` | `SensorCfg` | (section) |
 | `gps` | `SensorCfg` | (section) |
 | `magnetometer` | `SensorCfg` | (section) |
+| `magnetic_field_enu_t` | `list[float]` | [0.0, 2e-05, -4e-05] |
 
 ### `sensors.accelerometer`
 
@@ -232,6 +272,10 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `quantization` | `float` | 0.0 |
 | `saturation` | `float` | 0.0 |
 | `latency_s` | `float` | 0.0 |
+| `misalignment_std_deg` | `float` | 0.0 |
+| `dropout_probability` | `float` | 0.0 |
+| `startup_delay_s` | `float` | 0.0 |
+| `velocity_noise_std` | `float \| None` | None |
 
 ### `estimator`
 
@@ -240,6 +284,7 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `type` | `str` | 'none' |
 | `alignment_time_s` | `float` | 1.0 |
 | `gps_enabled` | `bool` | True |
+| `estimate_gyro_bias` | `bool` | True |
 
 ### `landing_zone`
 
@@ -269,6 +314,7 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `runs` | `int \| None` | None |
 | `splits` | `dict[str, rocket_sim.data.spec.SplitSpec]` | {} |
 | `parameters` | `list[rocket_sim.data.montecarlo.ParamSpec]` | [] |
+| `correlations` | `list[rocket_sim.data.montecarlo.CorrelationSpec]` | [] |
 | `shard_runs` | `int` | 50 |
 | `workers` | `int` | 0 |
 | `dataset` | `rocket_sim.data.spec.DatasetSection` | (section) |
@@ -299,6 +345,15 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `sigma` | `float \| None` | None |
 | `values` | `list[Any] \| None` | None |
 | `weights` | `list[float] \| None` | None |
+| `ref` | `str \| None` | None |
+| `exponent` | `float` | 1.0 |
+
+### `correlations`
+
+| key | type | default |
+|---|---|---|
+| `paths` | `list[str]` | [] |
+| `matrix` | `list[list[float]]` | [] |
 
 ### `dataset`
 

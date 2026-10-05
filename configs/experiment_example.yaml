@@ -1,0 +1,8 @@
+# Versioned experiment: wraps a batch spec with provenance (id, git commit, seed, hashes, environment).
+#   rocketsim experiment configs/experiment_example.yaml        # run
+#   rocketsim experiment --list                                 # list recorded experiments
+#   rocketsim experiment --verify experiments/<id>              # regenerate and compare shard hashes
+name: dr-baseline
+description: Domain-randomised windowed dataset for a velocity-prediction network (baseline seed)
+batch: domain_randomization.yaml
+master_seed: 20261004

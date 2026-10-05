@@ -101,12 +101,24 @@ class TVCAttitudeController(Controller):
     name = "tvc_attitude"
 
     def __init__(
-        self, wn: float = 6.0, zeta: float = 0.8, target: Any = "vertical", ki: float = 0.0, **_: Any
+        self,
+        wn: float = 6.0,
+        zeta: float = 0.8,
+        target: Any = "vertical",
+        ki: float = 0.0,
+        actuation: str = "tvc",
+        roll_damping: float = 0.0,
+        **_: Any,
     ) -> None:
-        if wn <= 0 or zeta < 0 or ki < 0:
-            raise ConfigError("tvc_attitude: wn > 0, zeta >= 0, ki >= 0 required")
+        if wn <= 0 or zeta < 0 or ki < 0 or roll_damping < 0:
+            raise ConfigError("tvc_attitude: wn > 0, zeta >= 0, ki >= 0, roll_damping >= 0 required")
+        if actuation not in ("tvc", "fins", "both"):
+            raise ConfigError("tvc_attitude: actuation must be tvc|fins|both")
         self.wn, self.zeta, self.ki = wn, zeta, ki
+        self.actuation = actuation
+        self.roll_damping = roll_damping  # roll-rate damper gain [1/s] (fins only)
         self.target = target
+        self._fin_authority = None
         self._authority = None
         self._target_vec: Vec = (0.0, 0.0, 1.0)
         self._int = [0.0, 0.0]
@@ -114,6 +126,7 @@ class TVCAttitudeController(Controller):
 
     def reset(self, ctx: dict[str, Any]) -> None:
         self._authority = ctx.get("authority")
+        self._fin_authority = ctx.get("fin_authority")
         axis = ctx.get("launch_axis", (0.0, 0.0, 1.0))
         tgt = self.target
         if tgt == "vertical":
@@ -129,10 +142,16 @@ class TVCAttitudeController(Controller):
         self._last_t = None
 
     def update(self, inp: ControlInput) -> Command:
-        if not inp.valid or inp.t_since_launch is None or self._authority is None:
+        if not inp.valid or inp.t_since_launch is None:
             return Command()
-        gpa = self._authority(inp.t)
-        if gpa is None:
+        authority, fin_authority = self._authority, self._fin_authority
+        gpa = authority(inp.t) if (self.actuation in ("tvc", "both") and authority is not None) else None
+        fa = (
+            fin_authority(inp.t, inp)
+            if (self.actuation in ("fins", "both") and fin_authority is not None)
+            else None
+        )
+        if gpa is None and fa is None:
             return Command()
         nose = quat_rotate(inp.quaternion, (1.0, 0.0, 0.0))
         err_l = cross(nose, self._target_vec)  # rotation vector (launch frame) nose -> target
@@ -148,7 +167,16 @@ class TVCAttitudeController(Controller):
         a_y = kp * ey + self.ki * self.wn**2 * self._int[0] - kd * inp.omega[1]
         a_z = kp * ez + self.ki * self.wn**2 * self._int[1] - kd * inp.omega[2]
         # thrust-offset torque: M_y = rn T sin(th_y), M_z = rn T sin(th_z), rn < 0  =>  th = -a * I/(|rn| T)
-        return Command(-a_y * gpa, -a_z * gpa)
+        cmd = Command()
+        if gpa is not None:
+            cmd.tvc_y, cmd.tvc_z = -a_y * gpa, -a_z * gpa
+        if fa is not None:
+            ky, kz, kx = (
+                fa  # radians of command per rad/s^2 of desired angular acceleration (pitch, yaw, roll)
+            )
+            cmd.fin_pitch, cmd.fin_yaw = a_y * ky, a_z * kz
+            cmd.fin_roll = -self.roll_damping * inp.omega[0] * kx
+        return cmd
 
 
 def build_controller(ctype: str, params: dict[str, Any]) -> Controller:

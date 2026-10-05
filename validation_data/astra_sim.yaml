@@ -1,0 +1,32 @@
+# Astra, EuRoC 2022 (Cesaroni L1350), sparse altitude log
+# NOTE: body length raised by 1.3 mm (1.8068 -> 1.8081 m) so the fin trailing edge (z=0.9134-0.2) sits inside the body; source geometry is inconsistent at that level.
+# Reconstructed from the RocketPy example notebook astra.ipynb (EuRoC, Portugal). INPUT CONVENTIONS (fixed BEFORE any
+# comparison was run; see validation_data/registry.yaml): RocketPy 'mass' = rocket mass INCLUDING the empty motor
+# casing, so the motor .eng used here is a derived copy with total weight = propellant weight. Nose 'vonKarman'
+# is approximated as a tangent ogive (same treatment as the Prometheus flight). Fin sweep = root - tip (RocketPy
+# default for trapezoidal fins). Fin thickness (3 mm), wind (none), atmosphere (ISA +8 K, a climatological
+# offset for a warm Portuguese afternoon) and launch angle (84 deg, the RocketPy example value) are NOT measured.
+config_version: 1
+name: astra_sim
+fidelity: 3
+simulation: {dt_s: 0.005, descent_dt_s: 0.05, t_max_s: 400}
+rocket:
+  name: Astra
+  body_diameter_m: 0.094
+  body_length_m: 1.8081
+  nose: {shape: ogive, length_m: 0.27}
+  fins: {count: 4, root_chord_m: 0.2, tip_chord_m: 0.118, span_m: 0.117, sweep_m: 0.082, thickness_m: 0.003, position_from_nose_m: 1.6080}
+  dry_mass_kg: 10.6462
+  cg_from_nose_m: 1.1257
+  inertia: {ixx_kgm2: 0.040824, iyy_kgm2: 6.6986}
+  motor_aft_from_nose_m: 1.8081
+  parachutes:
+  - {cd: 1.5, diameter_m: 0.60, trigger: apogee, delay_s: 1.0}
+  - {cd: 2.2, diameter_m: 2.0, trigger: altitude, altitude_m: 450.0, delay_s: 1.0}
+motor: {file: raw/Cesaroni_4263L1350-P_nocasing.eng}
+environment:
+  atmosphere: {model: isa, temperature_offset_k: 8.0}
+  gravity: {model: inverse_square}
+  wind: {model: none}
+  site_elevation_msl_m: 160.0
+launch: {elevation_deg: 84.0, azimuth_deg: 133.0, rail_length_m: 12.0}

@@ -51,15 +51,16 @@ angles) into the dynamics. A controller is any object with `reset(ctx)` and `upd
 | `config` | typed dataclass schema, strict parsing/validation with dotted-path errors, YAML/JSON/TOML loaders, hashing |
 | `environment` | atmosphere (ISA, exponential, table), gravity, wind (+turbulence, gusts), terrain |
 | `motor` | motor model, `.eng`/CSV loaders with a registry for new formats |
-| `vehicle` | geometry, Barrowman/build-up/table aerodynamics, mass model, `Vehicle` aggregate |
+| `vehicle` | geometry, component `Assembly` (sections, control surfaces), aerodynamic model hierarchy (simplified / Barrowman / enhanced / table / table2d), mass model with inertia tensor, `Vehicle` aggregate |
 | `physics` | quaternion/frame math, integrators and event refinement, 3-DOF and 6-DOF dynamics |
 | `simulation` | builders, fidelity resolution, phase state machine, recorder, the simulation loop |
 | `sensors` | accelerometer, gyro, barometer, GPS, magnetometer channels |
-| `estimation` | launch detector, TRIAD alignment, linear navigation Kalman filter |
-| `control` | TVC actuator, controller interface and built-in controllers |
-| `data` | telemetry schema, export (CSV/JSON/NPZ/Parquet), Monte Carlo, quality gates, dataset/windowing, parallel batch engine, dataset browser |
-| `validation` | standard telemetry, real-flight import, metrics, comparison, leave-one-out calibration |
+| `estimation` | `Estimator` interface; truth estimator, launch detector, TRIAD alignment, linear navigation Kalman filter with pad gyro-bias estimation |
+| `control` | generic `ActuatorBank` (TVC and control fins), `FinMixer`, controller interface and built-in controllers |
+| `data` | telemetry schema, export (CSV/JSON/NPZ/Parquet), Monte Carlo (copula, linked parameters), quality gates, leakage checks and statistics, dataset/windowing, parallel batch engine, dataset browser |
+| `validation` | standard telemetry, real-flight import, metrics, comparison, calibration, flight registry + holdout log, input-uncertainty Monte Carlo, sensitivity/error budget |
 | `ui` | PySide6 GUI (thin client of the engine) |
+| `experiments.py` | versioned dataset experiments (provenance record, reproduction check) |
 | `cli.py`, `benchmark.py`, `plotting.py`, `reporting.py`, `uncertainty.py` | front ends and helpers |
 
 ## Key design decisions
@@ -68,7 +69,10 @@ angles) into the dynamics. A controller is any object with `reset(ctx)` and `upd
 * **Truth vs. measurement are different columns** (`pos_*` vs `meas_*`/`est_*`); the estimator only sees sensor readings.
 * **Everything stochastic derives from one integer seed** via `SeedSequence`, with independent streams for wind, each
   sensor, and parameter draws; a run is a pure function of (config, seed).
-* **Versioned artefacts**: `PHYSICS_VERSION`, `SCHEMA_VERSION`, `CONFIG_VERSION`, `SIM_VERSION` stored in every record,
+* **The physics sees the actual actuator state**, never the command.
+* **Honest validation by construction**: flights carry a split label; holdout results go through a logged protocol keyed to a
+  fingerprint of the physics source ([validation.md](validation.md)).
+* **Versioned artefacts**: `PHYSICS_VERSION`, `SCHEMA_VERSION`, `CONFIG_VERSION`, `DATASET_VERSION`, `SIM_VERSION` stored in every record,
   manifest and runs table.
 * **Events, not output-grid snapping**: rail exit/apogee/impact are root-found; discontinuities are step boundaries.
 * **Fail loudly**: invalid config -> `ConfigError` with the key path; NaN/diverged state -> `SimulationError`; bad runs in

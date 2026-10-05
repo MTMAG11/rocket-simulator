@@ -1,0 +1,16 @@
+name: astra_euroc_2022
+description: Astra (EuRoC 2022, Portugal), Cesaroni L1350, sparse altitude log
+sim_config: astra_sim.yaml
+source:
+  name: Astra team (EuRoC 2022) via RocketPy example data
+  url: https://github.com/RocketPy-Team/RocketPy/tree/master/data/rockets/astra
+  quality: "Tier 3: sparse (~1 Hz) altitude samples, sensor type undocumented (possibly GPS-derived); parameters from a secondary source (RocketPy notebook)"
+  motor: Cesaroni 4263-L1350-CS (ThrustCurve.org file bundled with RocketPy)
+  known_uncertainties: "wind, atmosphere temperature/pressure and exact launch angle are unmeasured; vonKarman nose approximated as ogive; fin thickness assumed; mass/inertia taken from the RocketPy notebook (team values, not independently verified)"
+telemetry:
+  file: raw/astra/flight_data.csv
+  launch_threshold_altitude_m: 15
+  landing_altitude_m: 5
+  compare_landing: false
+  channels:
+    altitude: {time_column: t, column: alt, uncertainty: 10.0}

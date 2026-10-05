@@ -83,24 +83,68 @@ class LaunchDetector:
         return self.detected
 
 
+@dataclass
+class TruthState:
+    """True state handed to a ``TruthEstimator`` only (never to a real estimator)."""
+
+    position: tuple[float, float, float]
+    velocity: tuple[float, float, float]
+    quaternion: Quat
+    omega: tuple[float, float, float]
+    launch_time: float | None = None
+
+
 class Estimator:
-    """Interface: ``update(t, readings) -> EstimatedState``."""
+    """Interface: ``update(t, readings, truth=None) -> EstimatedState``.
+
+    Implementations: ``NullEstimator`` (no estimate), ``TruthEstimator`` (perfect state, for development),
+    ``NavigationFilter`` (linear KF). A future EKF implements the same method; controllers only ever see the
+    returned ``EstimatedState``, never the sensors.
+    """
 
     name = "estimator"
 
-    def update(self, t: float, r: SensorReadings) -> EstimatedState:  # pragma: no cover
+    def update(
+        self, t: float, r: SensorReadings | None, truth: TruthState | None = None
+    ) -> EstimatedState:  # pragma: no cover
         raise NotImplementedError
 
 
 class NullEstimator(Estimator):
     name = "none"
 
-    def update(self, t: float, r: SensorReadings) -> EstimatedState:
+    def update(self, t: float, r: SensorReadings | None, truth: TruthState | None = None) -> EstimatedState:
         return EstimatedState()
 
 
-def triad_attitude(up_b: np.ndarray, mag_b: np.ndarray) -> Quat:
-    """Body->launch quaternion from the measured 'up' and magnetic-field vectors (body frame)."""
+class TruthEstimator(Estimator):
+    """Passes the TRUE state through (perfect sensors and filter). For controller development and as the
+    upper bound when judging estimator-induced degradation; not deployable."""
+
+    name = "truth"
+
+    def update(self, t: float, r: SensorReadings | None, truth: TruthState | None = None) -> EstimatedState:
+        if truth is None:
+            return EstimatedState()
+        return EstimatedState(
+            True,
+            truth.position,
+            truth.velocity,
+            truth.quaternion,
+            truth.omega,
+            truth.launch_time is not None,
+            truth.launch_time,
+        )
+
+
+def triad_attitude(up_b: np.ndarray, mag_b: np.ndarray, mag_ref_enu: np.ndarray | None = None) -> Quat:
+    """Body->launch quaternion (TRIAD) from the measured 'up' and magnetic-field vectors (body frame).
+
+    ``mag_ref_enu`` is the KNOWN field in the launch frame (default: a field with no east component, which
+    reduces to the simple 'east = B x up' construction). Using the true reference matters when the local field
+    has an east component (declination)."""
+    if mag_ref_enu is not None and abs(float(mag_ref_enu[0])) > 1e-12:
+        return _triad_general(up_b, mag_b, np.asarray(mag_ref_enu, float))
     up = up_b / np.linalg.norm(up_b)
     east = np.cross(mag_b, up)
     east /= np.linalg.norm(east)
@@ -113,6 +157,20 @@ def triad_attitude(up_b: np.ndarray, mag_b: np.ndarray) -> Quat:
         (float(up[0]), float(up[1]), float(up[2])),
     )
     return dcm_to_quat(r)
+
+
+def _triad_general(up_b: np.ndarray, mag_b: np.ndarray, mag_l: np.ndarray) -> Quat:
+    """TRIAD with an arbitrary reference field: R = [t1 t2 t3]_L [t1 t2 t3]_B^T with t1 = up (trusted)."""
+
+    def triad(v1: np.ndarray, v2: np.ndarray) -> np.ndarray:
+        t1 = v1 / np.linalg.norm(v1)
+        t2 = np.cross(v1, v2)
+        t2 /= np.linalg.norm(t2)
+        return np.column_stack([t1, t2, np.cross(t1, t2)])
+
+    r = triad(np.array([0.0, 0.0, 1.0]), mag_l) @ triad(up_b, mag_b).T
+    rows = tuple(tuple(float(x) for x in row) for row in r)
+    return dcm_to_quat(rows)  # type: ignore[arg-type]
 
 
 def integrate_gyro(q: Quat, omega: np.ndarray, dt: float) -> Quat:
@@ -146,6 +204,9 @@ class NavigationFilter(Estimator):
         self._align_up: list[np.ndarray] = []
         self._align_mag: list[np.ndarray] = []
         self._align_p: list[float] = []
+        self._align_gyro: list[np.ndarray] = []
+        self.gyro_bias = np.zeros(3)  # estimated on the pad (stationary) and subtracted afterwards
+        self.mag_ref = np.asarray(sensors.magnetic_field_enu_t, float)
         self._p_ref = 101325.0
         self._h_ref = 0.0
         self.x = np.zeros(6)
@@ -180,22 +241,28 @@ class NavigationFilter(Estimator):
             self._align_mag.append(r.mag.copy())
         if r.baro_new:
             self._align_p.append(r.baro_pressure)
+        if r.gyro_new:
+            self._align_gyro.append(r.gyro.copy())
         if t >= self.cfg.alignment_time_s and self._align_up and self._align_mag:
             up = np.mean(self._align_up, axis=0)
             mag = np.mean(self._align_mag, axis=0)
-            self.q = triad_attitude(up, mag)
+            self.q = triad_attitude(up, mag, self.mag_ref)
+            if self.cfg.estimate_gyro_bias and self._align_gyro:
+                self.gyro_bias = np.mean(self._align_gyro, axis=0)  # vehicle is stationary on the pad
             if self._align_p:
                 self._p_ref = float(np.mean(self._align_p))
                 self._h_ref = self.isa.pressure_to_altitude(self._p_ref)
             self.aligned = True
 
-    def update(self, t: float, r: SensorReadings) -> EstimatedState:
+    def update(self, t: float, r: SensorReadings | None, truth: TruthState | None = None) -> EstimatedState:
+        if r is None:
+            return EstimatedState(valid=False)
         if not self.aligned:
             self._try_align(t, r)
             return EstimatedState(valid=False)
 
         if r.gyro_new:
-            self._omega = r.gyro.copy()
+            self._omega = r.gyro - self.gyro_bias
         if r.accel_new:
             self._f_b = r.accel.copy()
             dt = 0.0 if self._last_imu_t is None else t - self._last_imu_t
@@ -234,6 +301,11 @@ class NavigationFilter(Estimator):
             omega=(float(self._omega[0]), float(self._omega[1]), float(self._omega[2])),
             launch_detected=self.detector.detected,
             launch_time=self.detector.time,
+            extra={
+                "gyro_bias_x": float(self.gyro_bias[0]),
+                "gyro_bias_y": float(self.gyro_bias[1]),
+                "gyro_bias_z": float(self.gyro_bias[2]),
+            },
         )
 
     def _predict(self, dt: float) -> None:
@@ -267,4 +339,6 @@ def build_estimator(
 ) -> Estimator:
     if cfg.type == "nav_kf":
         return NavigationFilter(cfg, sensors, gravity, site_elevation)
+    if cfg.type == "truth":
+        return TruthEstimator()
     return NullEstimator()

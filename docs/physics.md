@@ -1,6 +1,6 @@
 # Physics models
 
-Physics model version: **1.1.0** (`rocket_sim.version.PHYSICS_VERSION`, stored in every record and dataset).
+Physics model version: **1.2.1** (`rocket_sim.version.PHYSICS_VERSION`, stored in every record and dataset).
 Every model below lists its equation, assumptions, source and limitations. Simplified models are
 labelled as such; nothing here is exact physics.
 
@@ -35,7 +35,7 @@ quaternion body->launch, body angular velocity; mass properties are explicit fun
 r_dot = v
 m v_dot = R(q) (F_thrust + F_aero)_B + F_chute_L + m g_L ,          g_L = (0, 0, -g(h))
 q_dot   = 1/2 q (x) (0, w)
-I w_dot = M - w x (I w) ,                                            I = diag(Ixx, Iyy, Iyy)
+I w_dot = M - w x (I w) ,                         I = 3x3 tensor (diag(Ixx, Iyy, Iyy) in the axisymmetric fast path)
 ```
 
 * Thrust is an *external* force (momentum thrust is inside the thrust-curve value). Neglected: jet damping,
@@ -47,26 +47,39 @@ I w_dot = M - w x (I w) ,                                            I = diag(Ix
 * Rail: while `on_rail` the vehicle is constrained to slide along the rail axis (no rotation, no backward slide);
   frictionless. Released when the travel exceeds `rail_length_m`.
 
-### Convergence (measured, `docs/` regenerate with the snippet in `tests/test_numerics.py`)
+### Convergence (measured at physics 1.2.0; ladder dt = 0.1 / 0.05 / 0.01 / 0.005 / 0.001 s)
 
-Error against a dt = 0.0005 s reference, example vehicle, 3 m/s crosswind, no parachute, RK4:
+Error against a dt = 0.0002 s reference, example vehicle, 3 m/s crosswind, no parachute, RK4 (reference dt 0.0002 here, 0.0005 in the
+automated ladder is `tests/test_numerics_v11.py::test_convergence_ladder`):
 
 | fidelity | dt [s] | apogee error [m] | apogee time error [s] | landing-x error [m] | impact speed error [m/s] |
 |---|---|---|---|---|---|
-| 2 (3-DOF) | 0.1 | +0.41 | +0.0035 | -0.17 | +0.0074 |
-| 2 | 0.05 | +0.03 | -0.0002 | -0.01 | +0.0005 |
-| 2 | 0.01 | +0.04 | +0.0002 | -0.02 | +0.0007 |
-| 2 | 0.001 | +0.003 | 0.0000 | -0.001 | 0.0000 |
-| 3 (6-DOF) | 0.05 | -0.15 | -0.0019 | -0.44 | -0.0061 |
-| 3 | 0.02 | +0.12 | +0.0008 | +0.20 | +0.0036 |
-| 3 | 0.01 | +0.01 | -0.0001 | +0.05 | +0.0006 |
-| 3 | 0.001 | -0.002 | 0.0000 | -0.007 | -0.0001 |
+| 2 (3-DOF) | 0.1 | +0.409 | +0.0035 | -0.170 | +0.0073 |
+| 2 | 0.05 | +0.028 | -0.0002 | -0.013 | +0.0005 |
+| 2 | 0.01 | +0.035 | +0.0001 | -0.023 | +0.0006 |
+| 2 | 0.005 | +0.017 | 0.0000 | -0.007 | +0.0003 |
+| 2 | 0.001 | 0.000 | 0.0000 | 0.000 | 0.0000 |
+| 3 (6-DOF) | 0.1 | *rejected by config validation (6-DOF needs dt <= 0.05 s)* | | | |
+| 3 | 0.05 | -0.149 | -0.0018 | +0.033 | -0.0027 |
+| 3 | 0.01 | +0.012 | 0.0000 | -0.005 | +0.0002 |
+| 3 | 0.005 | -0.007 | -0.0002 | +0.001 | -0.0001 |
+| 3 | 0.001 | 0.000 | 0.0000 | 0.000 | 0.0000 |
 
-Apogee is ~900 m, so even dt = 0.1 s (3-DOF) or 0.05 s (6-DOF) is accurate to < 0.05 % in apogee. The error does not
-fall monotonically below ~0.03 m: that floor comes from piecewise-linear thrust-curve corners and event location,
-not from the integrator order (RK4 order is verified separately: `test_integrator_order_of_accuracy`).
-6-DOF is capped at dt <= 0.05 s by config validation because attitude dynamics of statically stiff vehicles become
-unstable for larger steps (omega_n dt must stay O(1)). Euler at dt = 0.01 is >5x worse than RK4 (slow test).
+Apogee is ~900 m, so even dt = 0.1 s (3-DOF) or 0.05 s (6-DOF) is accurate to < 0.05 % in apogee. The error does not fall
+monotonically below ~0.03 m: that floor comes from piecewise-linear thrust-curve corners and event location, not from the
+integrator order (RK4 order is verified separately: `test_integrator_order_of_accuracy`). 6-DOF is capped at dt <= 0.05 s by
+config validation because attitude dynamics of statically stiff vehicles become unstable for larger steps (omega_n dt must
+stay O(1)): the 0.1 s case is therefore a *rejected configuration*, not a result. Euler at dt = 0.01 is >5x worse than RK4
+(slow test).
+
+### Verified invariants (V1.1, `tests/test_numerics_v11.py`)
+
+Quaternion: identity and conjugate algebra, 90/180 degree rotations about every axis, 4000-step integration keeps |q| = 1 to
+1e-12 and matches the exact exponential map to 1e-6, (heading, pitch, roll) round trip, gimbal-lock finiteness.
+Conservation limits: no forces -> constant velocity and zero rate; gravity only -> mechanical energy and horizontal momentum
+conserved (1e-9); thrust only -> Tsiolkovsky within 0.2 %; drag only -> energy decreases monotonically and v(t) follows the
+closed form `1/(k t + 1/v0)` to 1e-8; torque only -> `omega = M t / I`; torque-free asymmetric body -> |H| and kinetic energy
+conserved ([vehicle.md](vehicle.md)).
 
 ## Gravity (`environment/gravity.py`)
 
@@ -100,15 +113,23 @@ Limitations: sea-level static thrust (no altitude/pressure correction); propella
 grain geometry not modelled. Total-impulse variation between motors of the same type is typically a few percent and
 is the dominant uncertainty in apogee prediction (see validation: +-5 % thrust gives about +-10 % apogee).
 
-## Mass properties (`vehicle/mass.py`)
+## Mass properties (`vehicle/mass.py`, `vehicle/assembly.py`; details in [vehicle.md](vehicle.md))
 
-Rigid components (airframe, payload, motor casing, propellant) with parallel-axis theorem about the instantaneous CG:
-`Ixx = sum Ixx_i`, `Iyy = sum(Iyy_i + m_i x_i^2) - m x_cg^2`. Propellant = solid cylinder; casing and (default)
-airframe = thin-walled tube if no measured inertia is supplied (flagged as a warning).
+Rigid components (airframe sections, fins, extra masses, motor casing, propellant), each with its own mass, axial CG and
+(optionally) lateral offsets and a full inertia tensor, combined with the parallel-axis theorem about the instantaneous
+CG. With a component-based airframe (`rocket.sections`, `rocket.masses`) the CG and inertia are *computed* from the parts;
+the legacy lumped description (`dry_mass_kg`, `cg_from_nose_m`, optional `inertia`) is still accepted. When any inertia is
+estimated (thin shell / thin tube, never measured) the vehicle records a note and a warning. An axisymmetric fast path
+(V1-identical) is used when all offsets are zero; otherwise the general 3x3 tensor path (`MassProps.tensor()`) and the
+general Euler equations are used. Propellant: solid cylinder, mass from the thrust-curve impulse.
 
 ## Aerodynamics (`vehicle/aero.py`)
 
-Coefficients referenced to `S = pi d^2/4`.
+Since 1.2.0 the aerodynamics are a model *hierarchy* behind one coefficient interface (`CD/CL/Cm(M, alpha, Re, geometry)`);
+see [aerodynamics.md](aerodynamics.md). The text below describes the default `barrowman` model (the V1 build-up, generalised
+to multi-diameter airframes, transitions and boat-tails).
+
+Coefficients referenced to `S = pi d_ref^2/4`, d_ref = largest body diameter.
 
 **Force law (alpha = total angle of attack, 0..pi):**
 `F_x = -q S Cd0 cos(alpha)` (axial);
@@ -143,25 +164,46 @@ and `-rho V S CNa_fin r^2 w` (roll damping). Fin cant / roll forcing not modelle
   *Fluid-Dynamic Drag* (1965); Raymer, *Aircraft Design* ch. 12; Schlichting, *Boundary-Layer Theory*.
 * **Accuracy:** component build-up is a prior, good to roughly +-10-15 % at subsonic speed (see validation:
   three recovered flights: +0.5/+13/-5 % barometric apogee, RMS 8 %; see validation.md), +-25-30 % in the transonic/supersonic regime. Not modelled:
-  boat-tails/transitions (multi-diameter bodies), launch lugs/rail buttons (use `extra_cd`), fin flutter, fin cant,
-  interference beyond `K_fb`. `drag_scale` multiplies the total and should only be changed with a physical reason
+  launch lugs/rail buttons (use `extra_cd`), fin flutter, fin cant, interference beyond `K_fb`. Multi-diameter airframes,
+  transitions and boat-tails are supported since 1.2.0 (assembly-based; boat-tail base area depends on a flow-separation
+  rule of thumb). `drag_scale` multiplies the total and should only be changed with a physical reason
   (leave-one-out tests found no justification for a global tune).
 
-Other aero models: constant coefficients, and a Cd-vs-Mach table (coast and powered variants) for importing CFD,
-wind-tunnel or OpenRocket/RASAero curves.
+Other aero models: `simplified` (flat Cd), `enhanced` (Mach-dependent fin lift/CP, fin stall, fin wave drag), `table` (Cd(M)),
+`table2d` (Cd/Cl/Cm over Mach x alpha from a CSV: the CFD / wind-tunnel interface), `constant`.
 
 ## Static margin / stability
 
-`(x_cp - x_cg)/d` in calibers, from the subsonic Barrowman CP and the instantaneous CG; logged each step and warned
-at launch if < 1 cal (error-level warning if <= 0). Verified against RocketPy for an identical vehicle (cross-check in
-`validation_results/crosscheck_rocketpy.txt`).
+`(x_cp - x_cg)/d_ref` in calibers, from the subsonic Barrowman CP of the assembly (including transitions and boat-tails) and
+the instantaneous CG; logged each step (`static_margin`) and warned at launch if < 1 cal (error-level warning if <= 0).
+The CP of the normal force used for *moments* and the static CP are separate (`ForceCoefficients.x_cp_force` /
+`x_cp_static`): the enhanced model moves the fin CP with Mach. Cross-checked against RocketPy: CNa identical, CP within
+0.04 cal (`validation_data/crosscheck_geometry.py`, [validation.md](validation.md)).
 
-## Thrust-vector control
+## Thrust-vector control and aerodynamic control surfaces
 
-Thrust is deflected by (theta_y about y_B, theta_z about z_B) plus a fixed misalignment; applied at the nozzle exit
-plane, producing the moment `M = r_nozzle x F`. Actuator (`control/actuators.py`): clip -> delay -> first-order lag
-(exact exponential) -> rate limit -> angle limit. Not modelled: backlash, deadband, load-dependent torque limit.
-Aerodynamic control surfaces are **not implemented** (`Command` is the extension point).
+*TVC.* Thrust is deflected by (theta_y about y_B, theta_z about z_B) plus a fixed misalignment; applied at the nozzle exit
+plane, producing `M = r_nozzle x F` (including lateral CG offsets). The physics receives the **actual actuator state**, not
+the command (tested with a 0.5 s transport delay: no torque before the delayed command arrives). Verified analytically for
+zero, positive, negative and maximum gimbal (`tests/test_control_v11.py`).
+
+*Actuator model* (`control/actuators.py::ActuatorBank`, shared by TVC and fins): per channel clip to the command limit ->
+transport delay -> first-order lag (exact exponential) -> rate limit -> angle limit. The delay is applied at step
+boundaries (a delayed command is released at the first step at or after its due time), so it can be late by up to one step;
+the tests use aligned steps. **Hold:** the plant sees the actuator state at the *start* of each step (left-endpoint hold), i.e. an
+effective extra lag of about h/2 and a one-step response even for tau = delay = 0; in a fin-controlled run peak deflection
+varied ~5 % with dt and controller rate (apogee < 0.05 m). Not changed (it would alter physics and the holdout fingerprint). Not modelled: backlash, deadband,
+load-dependent torque limit, structural compliance.
+
+*Control surfaces* (`rocket.control_surfaces`, canards or tail fins with their own geometry, deflection, max angle, max rate,
+lag and delay): each fin is a static lifting surface (Barrowman/Helmbold slope) whose deflection delta_i gives a normal force
+`L_i = q S CNa_fin(M) delta_i` along n_i = (0, -sin phi_i, cos phi_i) at the fin aerodynamic centre, and an induced drag
+`-|L_i delta_i|`; the resulting moment is `r_i x F_i` about the instantaneous CG (pitch, yaw **and roll**). A `FinMixer`
+maps body-axis commands to individual deflections (matched filter; orthogonal channels for evenly spaced fins). The
+attitude controller can actuate `tvc`, `fins` or `both`. Verified: single-fin force/moment analytics, sign symmetry,
+mixer decoupling, saturation/rate limits, and a closed-loop run in which fins hold an otherwise tumbling (SM < 0.2 cal)
+vehicle within 6 deg of vertical. **Not validated against any real fin-control data; no fin flutter, no hinge moment, no
+fin-body interference of the movable surfaces beyond the static fin set.**
 
 ## Recovery
 
@@ -178,11 +220,12 @@ No ground rebound, tip-over or slide.
 
 ## Sensors, estimation, control
 
-See `rocket_sim/sensors`, `estimation`, `control` docstrings. Key honesty points: the estimator is a *linear* Kalman
-filter on position/velocity with gyro-integrated attitude (no accelerometer/magnetometer attitude correction in
-flight, no bias estimation); it compensates known sensor latency; it is **not** an EKF. Default sensor parameters are
-representative MEMS orders of magnitude, not a datasheet. The attitude controller is a PD pointing law with
-gain scheduling from the nominal motor curve.
+See [sensors.md](sensors.md) for the audited list. Key honesty points: the estimator is a *linear* Kalman filter on
+position/velocity with gyro-integrated attitude (TRIAD alignment on the pad with the configured reference magnetic field,
+pad gyro-bias estimation; no in-flight accelerometer/magnetometer attitude correction); it compensates known sensor
+latency; it is **not** an EKF (an EKF is a roadmap item; the `Estimator` interface is the extension point, and there is also
+a `truth` estimator for development). Default sensor parameters are representative MEMS orders of magnitude, not a
+datasheet. The attitude controller is a PD pointing law with gain scheduling from the nominal motor curve.
 
 ## Change log (physics versions)
 
@@ -190,5 +233,7 @@ gain scheduling from the nominal motor curve.
 |---|---|---|
 | 1.0.0 | initial release: Barrowman base drag `0.12 + 0.13 M^2`; roughness floor without compressibility | baseline flight errors (geometric comparison): apogee -4.4 / +0.2 / -11.1 % (Bella Lui / NDRT / Prometheus) |
 | 1.1.0 | Hoerner subsonic base drag blended to Barrowman supersonic; Raymer roughness cut-off with compressibility on both smooth and rough Cf | Prometheus Cd(M) in v1.0.0 *rose* 0.45->0.55 over M 0.1-0.85 while the team's RASAero curve falls 0.42->0.30. After the change: apogee -2.3 / +8.7 / +0.03 % (geometric) or +0.5 / +13.4 / -4.9 % (barometer-equivalent, the like-for-like comparison). Prometheus is in-sample. Details and what the NDRT regression means: `docs/validation.md` |
+| 1.2.0 | Aero model hierarchy (simplified/barrowman/enhanced/table/table2d) behind a CD/CL/CM(M, alpha, Re) interface; geometry-built CG/inertia (full tensor path); control-surface forces from the ACTUAL actuator state; crossflow drag acts at the planform centroid (was a fixed fraction of length); pad gyro-bias estimation | The only intended change to existing results is the crossflow centroid: fidelity-3 reference apogee 918.562 -> 918.465 m (-0.01 %); fidelity 2 unchanged; the three validation flights are unchanged to the printed precision (+0.50 / +13.41 / -4.90 %). New golden numbers in `tests/test_golden.py` |
+| 1.2.1 | `evaluate` memo key now includes the control-fin deflections (stage 1 of RK4 used the previous step's fins); the actuator output is copied to the dynamics right after each actuator step, so the force evaluation and the logged row at the next time see the actuator state at that time (they were one step stale) | found by critic review 2. Only flights with an active actuator command change: golden numbers (no control) are bit-identical; closed-loop fin test apogee 485.5658 -> 485.5657 m. Holdout flights have no control surfaces: results re-verified (`--migrate-fingerprint`) |
 
 Datasets generated with different physics versions are not comparable; the version is in every manifest and runs table.
