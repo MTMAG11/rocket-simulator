@@ -1,0 +1,51 @@
+{
+  "format": "rocket-sim-vehicle",
+  "format_version": 1,
+  "metadata": {
+    "name": "tvc-demo-76mm",
+    "description": "Illustrative 76 mm single-stage rocket with avionics, battery, recovery and a boat-tail. NOT a measured vehicle: every number is a plausible placeholder to show the format. Replace with CAD/weighed values.",
+    "author": "example",
+    "created": "2026-10-06",
+    "source": "manual",
+    "data_quality": "placeholder",
+    "notes": "x is measured aft from the nose tip; body axes x forward, y right, z down (docs/vehicle_format.md)"
+  },
+  "materials": {
+    "fiberglass": 1850.0,
+    "carbon_plate": 1600.0
+  },
+  "components": [
+    {"id": "nose", "type": "nose", "shape": "ogive", "x_start_m": 0.0, "length_m": 0.30, "base_diameter_m": 0.0762,
+     "material": "fiberglass", "wall_thickness_m": 0.0020},
+    {"id": "avionics_bay", "type": "body_tube", "x_start_m": 0.30, "length_m": 0.25, "diameter_m": 0.0762,
+     "material": "fiberglass", "wall_thickness_m": 0.0020},
+    {"id": "recovery_bay", "type": "body_tube", "x_start_m": 0.55, "length_m": 0.35, "diameter_m": 0.0762,
+     "material": "fiberglass", "wall_thickness_m": 0.0020},
+    {"id": "motor_section", "type": "body_tube", "x_start_m": 0.90, "length_m": 0.60, "diameter_m": 0.0762,
+     "material": "fiberglass", "wall_thickness_m": 0.0020},
+    {"id": "boat_tail", "type": "transition", "x_start_m": 1.50, "length_m": 0.10, "fore_diameter_m": 0.0762,
+     "aft_diameter_m": 0.0640, "material": "fiberglass", "wall_thickness_m": 0.0020},
+
+    {"id": "flight_computer", "type": "avionics", "mass_kg": 0.085, "cg_x_m": 0.42, "offset_m": [0.004, 0.0],
+     "shape": "box", "dimensions_m": [0.080, 0.050, 0.020], "notes": "ESP32 board + IMU + baro on a sled"},
+    {"id": "battery", "type": "battery", "mass_kg": 0.095, "cg_x_m": 0.40, "offset_m": [-0.018, 0.012],
+     "shape": "box", "dimensions_m": [0.070, 0.035, 0.018], "notes": "2S LiPo"},
+    {"id": "avionics_bulkheads", "type": "structure", "mass_kg": 0.060, "cg_x_m": 0.55, "shape": "cylinder",
+     "dimensions_m": [0.012, 0.0722]},
+    {"id": "parachute_and_shock_cord", "type": "recovery", "mass_kg": 0.210, "cg_x_m": 0.75, "shape": "cylinder",
+     "dimensions_m": [0.20, 0.060]},
+    {"id": "payload", "type": "payload", "mass_kg": 0.300, "cg_x_m": 0.62, "shape": "cylinder",
+     "dimensions_m": [0.15, 0.060]},
+    {"id": "motor_mount", "type": "motor_mount", "mass_kg": 0.240, "cg_x_m": 1.30, "shape": "cylinder",
+     "dimensions_m": [0.50, 0.0600], "notes": "tube + centering rings (motor itself is separate)"},
+
+    {"id": "fins", "type": "fin_set", "count": 4, "root_chord_m": 0.150, "tip_chord_m": 0.070, "span_m": 0.090,
+     "sweep_m": 0.070, "thickness_m": 0.0030, "x_root_le_m": 1.33, "material": "carbon_plate"}
+  ],
+  "motor": {"file": "../data/motors/AeroTech_K828FJ.eng", "aft_position_m": 1.60},
+  "parachutes": [
+    {"cd": 1.5, "diameter_m": 0.45, "trigger": "apogee", "delay_s": 1.0},
+    {"cd": 2.2, "diameter_m": 1.8, "trigger": "altitude", "altitude_m": 300.0}
+  ],
+  "aero": {"model": "barrowman", "surface_roughness_m": 6e-05}
+}

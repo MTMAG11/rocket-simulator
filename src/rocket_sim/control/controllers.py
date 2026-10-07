@@ -23,7 +23,7 @@ import bisect
 import importlib
 import math
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..errors import ConfigError
@@ -42,12 +42,22 @@ class ControlInput:
     velocity: Vec
     quaternion: Quat
     omega: Vec  # body rates [rad/s]
-    phase: int
+    phase: int  # TRUE flight phase in truth mode only; in estimate mode: 0 = on the pad, 2 = launch detected
     sensors: Any = None  # latest raw SensorReadings (None below fidelity 4); used by HIL bridges
+    samples: list = field(
+        default_factory=list
+    )  # EVERY sensor sample released since the last tick (only if wants_samples)
+    state_source: str = (
+        "estimate"  # 'estimate' (flight-computer state) or 'truth' (development shortcut; recorded)
+    )
 
 
 class Controller(ABC):
     name = "controller"
+    consumes_state = (
+        True  # False: the controller uses only sensor samples (HIL bridge); it is then never handed a state
+    )
+    wants_samples = False  # True: the simulator collects every released sensor sample and passes it in ControlInput.samples
 
     def reset(self, ctx: dict[str, Any]) -> None:  # noqa: B027 - optional hook
         """Called once before the run. ``ctx`` has 'authority' and 'launch_axis' (see sim)."""
@@ -120,12 +130,14 @@ class TVCAttitudeController(Controller):
         self.target = target
         self._fin_authority = None
         self._authority = None
+        self._authority_tau = None
         self._target_vec: Vec = (0.0, 0.0, 1.0)
         self._int = [0.0, 0.0]
         self._last_t: float | None = None
 
     def reset(self, ctx: dict[str, Any]) -> None:
         self._authority = ctx.get("authority")
+        self._authority_tau = ctx.get("authority_since_ignition")
         self._fin_authority = ctx.get("fin_authority")
         axis = ctx.get("launch_axis", (0.0, 0.0, 1.0))
         tgt = self.target
@@ -145,7 +157,12 @@ class TVCAttitudeController(Controller):
         if not inp.valid or inp.t_since_launch is None:
             return Command()
         authority, fin_authority = self._authority, self._fin_authority
-        gpa = authority(inp.t) if (self.actuation in ("tvc", "both") and authority is not None) else None
+        gpa = None
+        if self.actuation in ("tvc", "both"):
+            if self._authority_tau is not None:  # indexed by time since launch: no true clock needed
+                gpa = self._authority_tau(inp.t_since_launch)
+            elif authority is not None:
+                gpa = authority(inp.t)
         fa = (
             fin_authority(inp.t, inp)
             if (self.actuation in ("fins", "both") and fin_authority is not None)
@@ -186,6 +203,10 @@ def build_controller(ctype: str, params: dict[str, Any]) -> Controller:
         return ScheduleController(params.get("table", []))
     if ctype == "tvc_attitude":
         return TVCAttitudeController(**params)
+    if ctype == "hil":
+        from ..hil.bridge import build_bridge
+
+        return build_bridge(params)
     if ctype == "python":
         spec = params.get("class")
         if not isinstance(spec, str) or ":" not in spec:

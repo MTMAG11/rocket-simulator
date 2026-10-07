@@ -173,3 +173,15 @@ SHA-256 of the manifest and every shard; the spec is copied next to it. Same spe
 
 `rocketsim benchmark` measures single runs and a scaling ladder of **1 / 100 / 1000 / 10000** simulations (`--scales` to change).
 Numbers and the machine they were measured on are in [performance.md](performance.md).
+
+
+## V1.2: column roles, provenance and state-source flags
+
+* Every column has a **role** (`truth`, `measurement`, `estimate`, `command`, `actual`; `schema.md`, `rocket_sim.data.schema.columns_by_role`).
+  Choose ML inputs from `measurement`/`estimate` columns to model a flight computer; use `truth` columns for labels. New truth columns:
+  the full inertia tensor (`izz`, `ixy`, `ixz`, `iyz`), lateral CG offsets, **true specific force** (`fsp_*`, what an ideal accelerometer
+  reads); new measurement flags `meas_{accel,gyro,mag}_new`; estimate `est_gyro_bias_*`; per-fin commands `fin_dcmd_*`. Schema version 1.2.0.
+* `runs.parquet` carries `aero_provenance_kind` (`estimate` / `mixed`), `aero_model` and `controller_state_source`
+  (`none` / `estimate` / `truth` / `measurements_only`) for every run, and each flight record carries the full `aero_provenance` in its metadata.
+  **A dataset whose controller_state_source is `truth` was generated with a controller that saw the true state: do not present it as
+  representing a flight computer.** Estimated and imported aerodynamics are never labelled alike.

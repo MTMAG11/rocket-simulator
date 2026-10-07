@@ -49,6 +49,12 @@ class RunMetadata:
     config: dict[str, Any] = field(default_factory=dict)
     wall_time_s: float = 0.0
     input_files: dict[str, str] = field(default_factory=dict)  # external input file -> sha256
+    aero_provenance: dict[str, Any] = field(
+        default_factory=dict
+    )  # what the aerodynamic numbers ARE (estimate / imported / mixed)
+    controller_state_source: str = (
+        ""  # none | estimate | truth | measurements_only: what the controller was fed
+    )
     n_steps: int = 0
 
     def to_dict(self) -> dict[str, Any]:

@@ -11,3 +11,4 @@ Validation: epfl_bella_lui_2020
   altitude (descent)   n=  399  RMSE    3.734  MAE    3.058  max|e|    9.261  bias   +1.130  NRMSE  0.80 %
   velocity             n=  178  RMSE    3.428  MAE    2.336  max|e|   11.123  bias   -2.321  NRMSE  3.80 %
   note: simulated altitude compared as: barometric
+  note: alignment check: ascent-altitude RMSE 3.3 m at the applied shift, 3.3 m at an extra shift of +0.025 s (the applied alignment is NOT tuned to the RMSE)

@@ -379,3 +379,20 @@ def test_evaluate_memo_sees_fin_changes_without_manual_cache_reset():
     assert np.linalg.norm(b - a) > 1e-6
     dyn.controls.fin = [0.0] * 4
     assert np.allclose(np.array(dyn.evaluate(0.0, y).wdot), a)
+
+
+def test_actuator_commands_are_applied_in_due_time_order():
+    """Regression: a later-issued command with an earlier due time (a latency change) must not be blocked by an earlier-issued one."""
+    from rocket_sim.control.actuators import ActuatorBank
+
+    bank = ActuatorBank([1.0], [1e6], [0.0], [0.0])
+    bank.command(0.5, [0.9])  # due 0.5
+    bank.command(0.1, [0.2])  # due 0.1: must be applied FIRST
+    seen = []
+    t = 0.0
+    for _ in range(80):
+        bank.step(t, 0.01)
+        t += 0.01
+        seen.append(bank.state[0])
+    assert seen[11] == pytest.approx(0.2) and seen[-1] == pytest.approx(0.9)
+    assert max(seen[:40]) == pytest.approx(0.2)  # 0.9 not applied before t = 0.5

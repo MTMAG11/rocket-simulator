@@ -95,6 +95,148 @@ class ControlFin:
     delay: float
 
 
+PROVENANCE_KINDS = (
+    "analytical",
+    "barrowman",
+    "empirical",
+    "imported_table",
+    "experimental",
+    "cfd",
+    "user_defined",
+)
+# kinds that are ESTIMATES made by this simulator or by a textbook method (as opposed to data brought in from outside)
+ESTIMATE_KINDS = ("analytical", "barrowman", "empirical")
+
+
+@dataclass(frozen=True)
+class ProvItem:
+    """Where one group of aerodynamic numbers comes from."""
+
+    kind: str
+    source: str
+    confidence: str = "unknown"  # low | medium | high | unknown (a judgement, stated, not computed)
+
+    def __post_init__(self) -> None:
+        if self.kind not in PROVENANCE_KINDS:
+            raise ConfigError(f"aero provenance kind must be one of {PROVENANCE_KINDS}, got {self.kind!r}")
+
+    @property
+    def is_estimate(self) -> bool:
+        return self.kind in ESTIMATE_KINDS
+
+
+@dataclass(frozen=True)
+class AeroProvenance:
+    """Provenance of every aerodynamic quantity a model supplies, plus its stated range of applicability.
+
+    ``reynolds_dependence`` states honestly how (or whether) Reynolds number enters: it is NOT silently assumed."""
+
+    model: str
+    drag: ProvItem
+    normal_force_cp: ProvItem
+    damping: ProvItem
+    mach_range: tuple[float, float] | None = None
+    alpha_range_deg: tuple[float, float] | None = None
+    reynolds_range: tuple[float, float] | None = None
+    reynolds_dependence: str = "not modelled"
+    notes: tuple[str, ...] = ()
+
+    @property
+    def kind(self) -> str:
+        """One label for datasets: 'estimate' (all analytical), 'imported' (all external data), or 'mixed'."""
+        est = [self.drag.is_estimate, self.normal_force_cp.is_estimate, self.damping.is_estimate]
+        return "estimate" if all(est) else ("imported" if not any(est) else "mixed")
+
+    def to_dict(self) -> dict:
+        return {
+            "model": self.model,
+            "kind": self.kind,
+            "drag": vars(self.drag).copy(),
+            "normal_force_cp": vars(self.normal_force_cp).copy(),
+            "damping": vars(self.damping).copy(),
+            "mach_range": list(self.mach_range) if self.mach_range else None,
+            "alpha_range_deg": list(self.alpha_range_deg) if self.alpha_range_deg else None,
+            "reynolds_range": list(self.reynolds_range) if self.reynolds_range else None,
+            "reynolds_dependence": self.reynolds_dependence,
+            "notes": list(self.notes),
+        }
+
+
+_BARROWMAN_CP = ProvItem(
+    "barrowman", "Barrowman (1966/67) normal force and CP from the component geometry", "medium"
+)
+_BARROWMAN_DAMP = ProvItem("analytical", "strip-theory damping from the Barrowman lift slopes", "low")
+
+
+def default_provenance(
+    name: str,
+    user: dict | None = None,
+    mach_range: tuple[float, float] | None = None,
+    alpha_range_deg: tuple[float, float] | None = None,
+    stability_supplied: bool = False,
+) -> AeroProvenance:
+    """Provenance of a model before any user declaration. ``user`` ({kind, source, confidence}) describes the DRAG /
+    coefficient data of table-type and constant models (the numbers the user brought)."""
+    u = None
+    if user:
+        u = ProvItem(
+            str(user.get("kind", "user_defined")),
+            str(user.get("source", "unspecified")),
+            str(user.get("confidence", "unknown")),
+        )
+    if name in ("barrowman", "simplified", "enhanced"):
+        drag = {
+            "barrowman": ProvItem(
+                "empirical",
+                "component drag build-up (Hoerner form factor, Schlichting/Raymer skin friction, Hoerner base drag)",
+                "medium",
+            ),
+            "simplified": u
+            or ProvItem("user_defined", "flat Cd supplied in the config (aero.cd)", "unknown"),
+            "enhanced": ProvItem(
+                "empirical", "Barrowman drag build-up plus Ackeret fin wave drag (linear theory)", "low"
+            ),
+        }[name]
+        mr = {"barrowman": (0.0, 0.9), "simplified": mach_range, "enhanced": (0.0, 2.0)}[name]
+        notes = {
+            "barrowman": (
+                "subsonic validity; no flight data above ~Mach 0.9 (docs/validation.md)",
+                "linear-theory normal force to ~15 deg angle of attack; beyond it a crossflow estimate",
+            ),
+            "simplified": ("drag is the user's number; stability is Barrowman",),
+            "enhanced": (
+                "transonic fin lift is a blend of two linear-theory limits (+-30-50 %); NO real-flight validation",
+            ),
+        }[name]
+        return AeroProvenance(
+            name,
+            drag,
+            _BARROWMAN_CP,
+            _BARROWMAN_DAMP,
+            mr,
+            alpha_range_deg or (0.0, 15.0),
+            None,
+            "skin friction only (laminar/turbulent Cf and roughness cut-off); pressure drag and lift are Re-independent",
+            notes,
+        )
+    drag = u or ProvItem(
+        "user_defined", "coefficients supplied in the config with no declared provenance", "unknown"
+    )
+    stab = ProvItem("user_defined", "supplied CNa/CP", "unknown") if stability_supplied else _BARROWMAN_CP
+    damp = _BARROWMAN_DAMP
+    if name == "table2d":
+        stab = u or ProvItem("imported_table", "CL/CM columns of the imported table", "unknown")
+        damp = _BARROWMAN_DAMP
+    notes = (
+        ("no Reynolds-number axis: Cd/Cl/Cm are taken as Re-independent",)
+        if name != "constant"
+        else ("fixed coefficients: no Mach, alpha or Re dependence",)
+    )
+    return AeroProvenance(
+        name, drag, stab, damp, mach_range, alpha_range_deg, None, "none (data has no Reynolds axis)", notes
+    )
+
+
 def smoothstep(x: float) -> float:
     x = min(max(x, 0.0), 1.0)
     return x * x * (3.0 - 2.0 * x)
@@ -112,6 +254,7 @@ class AerodynamicModel(ABC):
     roll_damping_cn: float = 0.0
     roll_damping_radius: float = 0.0
     control_fins: tuple[ControlFin, ...] = ()
+    provenance: AeroProvenance | None = None  # set by the builder; see default_provenance
 
     @abstractmethod
     def coefficients(self, mach: float, reynolds: float, powered: bool) -> AeroCoefficients:

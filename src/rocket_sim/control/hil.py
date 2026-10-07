@@ -1,4 +1,7 @@
-"""Hardware-in-the-loop (HIL) bridge: a controller that lives on the other side of a byte transport.
+"""DEPRECATED (V1): use ``rocket_sim.hil`` (protocol v2: every timestamped sample, handshake, timing, record/replay).
+Kept so existing code and tests keep working; it sends only the LATEST sample of each sensor.
+
+Hardware-in-the-loop (HIL) bridge: a controller that lives on the other side of a byte transport.
 
 The simulator stays authoritative for physics; a *real flight computer* (or any external process) receives the
 SIMULATED SENSOR readings, runs its own estimator/controller, and replies with actuator commands:
@@ -37,6 +40,7 @@ class HilController(Controller):
     """Forward raw sensor readings to an external flight computer and return its commands."""
 
     name = "hil"
+    consumes_state = False  # raw sensors only: never handed a state
 
     def __init__(self, transport: Transport) -> None:
         self.transport = transport
@@ -47,7 +51,6 @@ class HilController(Controller):
             raise SimulationError("HIL controller needs sensors: run at fidelity >= 4")
         msg: dict[str, Any] = {
             "t": inp.t,
-            "phase": inp.phase,
             "accel": [float(x) for x in rd.accel],
             "gyro": [float(x) for x in rd.gyro],
             "baro_pa": float(rd.baro_pressure),

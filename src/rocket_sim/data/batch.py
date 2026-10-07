@@ -184,6 +184,9 @@ def execute_chunk(task: dict[str, Any]) -> dict[str, Any]:
                     "n_steps": rec.meta.n_steps,
                     "wall_time_s": rec.meta.wall_time_s,
                     "config_hash": rec.meta.config_hash,
+                    "aero_provenance_kind": rec.meta.aero_provenance.get("kind", ""),
+                    "aero_model": rec.meta.aero_provenance.get("model", ""),
+                    "controller_state_source": rec.meta.controller_state_source,
                 }
             )
             row.update(_flatten("res.", rec.summary))

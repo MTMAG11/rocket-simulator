@@ -55,6 +55,7 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `motor_aft_from_nose_m` | `float \| None` | None |
 | `aero` | `AeroCfg` | (section) |
 | `parachutes` | `list[ParachuteCfg]` | [] |
+| `vehicle_source` | `dict[str, Any] \| None` | None |
 
 ### `rocket.nose`
 
@@ -87,6 +88,10 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `offset_z_m` | `float` | 0.0 |
 | `ixx_kgm2` | `float` | 0.0 |
 | `iyy_kgm2` | `float` | 0.0 |
+| `izz_kgm2` | `float \| None` | None |
+| `ixy_kgm2` | `float` | 0.0 |
+| `ixz_kgm2` | `float` | 0.0 |
+| `iyz_kgm2` | `float` | 0.0 |
 
 ### `rocket.control_surfaces`
 
@@ -138,6 +143,7 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `stall_angle_deg` | `float` | 18.0 |
 | `table2d_file` | `str \| None` | None |
 | `x_cm_ref_from_nose_m` | `float \| None` | None |
+| `provenance` | `dict[str, Any] \| None` | None |
 
 ### `rocket.parachutes`
 
@@ -246,6 +252,11 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `type` | `str` | 'none' |
 | `rate_hz` | `float` | 50.0 |
 | `use_truth` | `bool` | False |
+| `state_source` | `str` | 'auto' |
+| `design_inertia_scale` | `float` | 1.0 |
+| `compute_time_s` | `float` | 0.0 |
+| `uplink_latency_s` | `float` | 0.0 |
+| `downlink_latency_s` | `float` | 0.0 |
 | `params` | `dict[str, Any]` | {} |
 
 ### `sensors`

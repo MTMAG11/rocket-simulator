@@ -87,6 +87,9 @@ class SensorChannel:
         self.has_value = False
         self.new = False  # True on steps where a fresh sample became visible
         self.dropped = 0  # fixes lost (startup delay or dropout)
+        self.collect: list[tuple[float, float, np.ndarray]] | None = (
+            None  # (t_visible, t_sample, value) since last drain
+        )
 
     def due(self, t: float) -> bool:
         return t >= self.next_time - 1e-9
@@ -124,7 +127,9 @@ class SensorChannel:
         """Release samples whose latency has elapsed. Returns True if a new value appeared."""
         fresh = False
         while self._queue and self._queue[0][0] <= t + 1e-9:
-            _, self.value = self._queue.popleft()
+            tv, self.value = self._queue.popleft()
+            if self.collect is not None:
+                self.collect.append((tv, tv - self.cfg.latency_s, self.value.copy()))
             self.has_value = True
             fresh = True
         self.new = fresh
@@ -164,6 +169,42 @@ class SensorSuite:
         self.mag = SensorChannel(cfg.magnetometer, 3, g[4]) if cfg.magnetometer.enabled else None
         self._channels = [c for c in (self.accel, self.gyro, self.baro, self.gps, self.mag) if c]
         self.mag_ref = np.asarray(cfg.magnetic_field_enu_t, float)
+
+    def _named(self) -> list[tuple[str, SensorChannel]]:
+        pairs = (
+            ("accel", self.accel),
+            ("gyro", self.gyro),
+            ("baro", self.baro),
+            ("gps", self.gps),
+            ("mag", self.mag),
+        )
+        return [(n, c) for n, c in pairs if c is not None]
+
+    def enable_collection(self) -> None:
+        """Start keeping EVERY released sample (for flight computers that must see all of them, not just the latest)."""
+        for _, c in self._named():
+            if c.collect is None:
+                c.collect = []
+
+    def drain(self) -> list[dict]:
+        """Samples released since the last drain: ``{sensor, t_sample, t_visible, value}``, ordered by visibility time."""
+        out: list[dict] = []
+        for name, c in self._named():
+            if c.collect:
+                out += [
+                    {"sensor": name, "t_sample": ts, "t_visible": tv, "value": [float(x) for x in v]}
+                    for tv, ts, v in c.collect
+                ]
+                c.collect.clear()
+        order = {
+            "gyro": 0,
+            "accel": 1,
+            "mag": 2,
+            "baro": 3,
+            "gps": 4,
+        }  # same precedence as the in-process filter: rates before specific force
+        out.sort(key=lambda d: (d["t_visible"], order[d["sensor"]]))
+        return out
 
     def next_event_time(self) -> float:
         return min((c.next_time for c in self._channels), default=math.inf)

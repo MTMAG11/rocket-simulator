@@ -1,5 +1,12 @@
 # Vehicle geometry, mass properties, control surfaces and TVC
 
+## 0. Vehicle file (V1.2)
+
+The recommended way to define a vehicle is the versioned **vehicle file** (`vehicle.json`): a list of physical components with
+mass, position, dimensions, material and optional measured inertia tensor, from which everything is derived
+([vehicle_format.md](vehicle_format.md), `rocketsim vehicle FILE`). The sections below describe what the simulator does with the
+description; they apply equally to a `rocket:` section written by hand.
+
 ## 1. Component-based airframe
 
 `rocket.sections` is a list stacked from the nose tip aft; each entry is a `nose`, `body`, `transition` or `boattail`
@@ -38,6 +45,14 @@ active model (Mach-dependent for `enhanced`), the *static margin* uses the subso
 about the instantaneous CG including lateral CG offsets, so a lateral CG offset produces a roll/pitch moment from thrust
 and aerodynamic forces.
 
+## 3b. Actuator chain (V1.2 statement)
+
+`commanded state -> [compute + downlink latency] -> saturate -> transport delay -> first-order lag -> rate limit -> angle limit ->
+actual state -> physical force/moment`. The conceptual order in the V1.2 brief (rate limit before delay) differs from the implemented
+order (delay before lag and rate limit): the delay is the *communication* latency before the actuator sees the command, while lag and
+rate limit are the actuator's own dynamics, so the actuator slews toward the delayed command. The physics reads `actuator.state`
+only. One reusable `ActuatorBank` serves TVC (2 channels) and control fins (N channels); future servos would be another bank with their own limits.
+
 ## 4. TVC (audited in V1.1)
 
 Thrust vector `T (cos th_z cos th_y, sin th_z, -cos th_z sin th_y)` in the body frame about the fixed misalignment; applied at
@@ -61,6 +76,10 @@ vehicle on the rail and in the first moments of flight - an intrinsic property, 
 the primary actuator at low speed.
 
 ## 6. Limits
+
+* **Known inconsistency**: the legacy single-diameter path places the fin-set mass at leading edge + half the mean chord, while the component path
+  (sections / vehicle file) adds the sweep centroid term. Changing the legacy path would change validated results, so it is documented, not changed.
+* Only the motor propellant changes mass in flight; there is no per-component mass-changing flag, no motor-mount geometry and no off-axis motor.
 
 No pods/strakes/launch lugs (use `extra_cd`), single trapezoidal fin set plus movable sets, no fin flutter or hinge-moment
 model, no actuator backlash/deadband/torque limit, no structural flexibility, propellant CG fixed at the motor centre, no

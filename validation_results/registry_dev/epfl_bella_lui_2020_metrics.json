@@ -48,6 +48,12 @@
     "bias": 1.1303130806756292,
     "nrmse_pct": 0.8006336191857876
   },
+  "alignment_scan": {
+    "best_extra_shift_s": 0.025000000000000133,
+    "ascent_rmse_applied_m": 3.345250681659233,
+    "ascent_rmse_best_m": 3.3182614169838467,
+    "scan_range_s": 1.5
+  },
   "velocity": {
     "n": 178,
     "rmse": 3.4284815814872505,

@@ -66,7 +66,9 @@ def _round_sig(x: float, n: int) -> float:
     return round(x, n - 1 - int(math.floor(math.log10(abs(x)))))
 
 
-def format_value(value: float | None, metric: str, unit: str = "", fidelity: int = 3) -> str:
+def format_value(
+    value: float | None, metric: str, unit: str = "", fidelity: int = 3, extrapolated: bool = False
+) -> str:
     """Value rounded to its uncertainty, e.g. '800 +/- 80 m'. Falls back to 3 s.f. if unknown."""
     if value is None:
         return "n/a"
@@ -81,7 +83,7 @@ def format_value(value: float | None, metric: str, unit: str = "", fidelity: int
     s_r = _round_sig(sigma, sig)
     decimals = max(0, sig - 1 - int(math.floor(math.log10(s_r))))
     v_r = round(value, decimals)
-    star = "*" if unc.provisional else ""
+    star = "*" if (unc.provisional or extrapolated) else ""
     return f"{v_r:.{decimals}f} +/- {s_r:.{decimals}f}{star} {unit}".strip()
 
 

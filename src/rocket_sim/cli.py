@@ -4,6 +4,9 @@ simulate CONFIG                 run one flight, print a summary, optionally expo
 batch SPEC [--runs N]           Monte-Carlo batch (parallel, checkpointed, resumable)
 generate-dataset SPEC           same engine, ML dataset kinds (tabular / windowed)
 validate FLIGHT.yaml            compare the simulator against real telemetry
+timing CONFIG                  every rate, period and latency of the loop
+hil CONFIG                     headless HIL run through the flight-computer protocol
+vehicle FILE                   derive mass properties, CG, inertia tensor, CP, static margin
 experiment FILE.yaml           versioned dataset experiment (--verify DIR, --list)
 validate-registry              run the flight registry (development / calibration / holdout split)
 export SOURCE                   convert a saved record / pull one run out of a dataset
@@ -170,6 +173,109 @@ def cmd_validate_registry(a: argparse.Namespace) -> int:
         only=tuple(a.only) if a.only else None,
     )
     print(summarize(rows))
+    return 0
+
+
+def _load_vehicle_cfg(path: str):
+    """A vehicle .json (wrapped in a minimal simulation config) or an ordinary simulation config."""
+    import json
+
+    from .config import config_from_dict, load_config
+
+    p = Path(path)
+    if p.suffix.lower() == ".json":
+        d = json.loads(p.read_text(encoding="utf-8"))
+        if d.get("format") == "rocket-sim-vehicle":
+            return config_from_dict(
+                {"config_version": 1, "fidelity": 3, "vehicle_file": p.name}, base_dir=p.parent
+            )
+    return load_config(p)
+
+
+def cmd_vehicle(a: argparse.Namespace) -> int:
+    import json
+
+    from .simulation.builder import build_vehicle
+    from .vehicle.report import format_report, mass_properties_report
+    from .vehicle.vehicle_file import load_vehicle
+
+    cfg = _load_vehicle_cfg(a.source)
+    rep = mass_properties_report(build_vehicle(cfg))
+    if a.json:
+        print(json.dumps(rep, indent=2))
+    else:
+        print(format_report(rep))
+        src = cfg.rocket.vehicle_source
+        if src:
+            v = load_vehicle(Path(a.source)) if a.source.endswith(".json") else None
+            print(
+                f"\nvehicle file {src['file']} sha256 {src['sha256'][:16]}... data quality: {src['data_quality']}"
+            )
+            for w in v.warnings if v else []:
+                print(f"warning: {w}")
+    return 0
+
+
+def cmd_timing(a: argparse.Namespace) -> int:
+    import json
+
+    from .config import load_config
+    from .simulation.timing import format_timing, timing_report
+
+    rep = timing_report(load_config(a.config))
+    print(json.dumps(rep, indent=2) if a.json else format_timing(rep))
+    return 0
+
+
+def cmd_hil(a: argparse.Namespace) -> int:
+    """Headless HIL run: simulator + sensors -> protocol v2 -> flight computer -> actuator, with the loop logged."""
+    from .config import apply_overrides, config_from_dict, read_mapping
+    from .hil import HilBridgeController, RecordingTransport
+    from .simulation import Simulation
+
+    p = Path(a.config)
+    params: dict = {}
+    if a.uplink is not None:
+        params["uplink_latency_s"] = (
+            a.uplink
+        )  # an explicit flag overrides controller.uplink_latency_s in the config
+    if a.replay:
+        params["replay"] = a.replay
+    elif a.command:
+        params["command"] = a.command
+    else:
+        params["fc"] = "reference"
+    ov = {
+        "fidelity": max(4, int(read_mapping(p).get("fidelity", 4))),
+        "estimator.type": "none",
+        "controller.type": "hil",
+        "controller.state_source": "auto",
+        "controller.params": params,
+    }
+    if a.rate:
+        ov["controller.rate_hz"] = a.rate
+    cfg = config_from_dict(apply_overrides(read_mapping(p), ov), base_dir=p.parent)
+    sim = Simulation(cfg, seed=a.seed)
+    bridge = sim.controller
+    assert isinstance(bridge, HilBridgeController)
+    recorder = None
+    if a.log:
+        recorder = bridge.transport = RecordingTransport(bridge.transport)
+    try:
+        rec = sim.run()
+    finally:
+        bridge.close()
+    bridge.finish()
+    if recorder is not None:
+        recorder.write_jsonl(a.log)
+    print(
+        f"HIL run: {len(bridge.ticks)} control ticks, apogee {rec.summary['apogee_m']:.1f} m, status {rec.meta.status}"
+    )
+    if a.out:
+        from .data.export import export_record
+
+        for f in export_record(rec, a.out, "hil_run", ("parquet",)):
+            print(f"wrote {f}")
     return 0
 
 
@@ -347,6 +453,44 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--only", action="append", metavar="FLIGHT_ID", help="restrict to these flight ids")
     r.add_argument("--calibration-id", help="id of the calibration record that produced --set values")
     r.set_defaults(fn=cmd_validate_registry)
+
+    tm = sub.add_parser("timing", help="print every rate, period and latency of the loop")
+    tm.add_argument("config")
+    tm.add_argument("--json", action="store_true")
+    tm.set_defaults(fn=cmd_timing)
+
+    hl = sub.add_parser(
+        "hil",
+        help="headless hardware-in-the-loop run (reference flight computer, a child process or a replay)",
+    )
+    hl.add_argument(
+        "config", help="a simulation config (its controller/estimator are replaced by the HIL bridge)"
+    )
+    hl.add_argument(
+        "--command",
+        nargs=argparse.REMAINDER,
+        metavar="ARG",
+        help="launch a flight-computer process speaking protocol v2 on stdin/stdout; give it LAST: --command python -m rocket_sim.hil.flight_computer",
+    )
+    hl.add_argument("--replay", help="replay a recorded session instead of running a flight computer")
+    hl.add_argument("--log", help="write the full request/response session (JSONL) here")
+    hl.add_argument("--out", help="export the flight record (Parquet) here")
+    hl.add_argument(
+        "--uplink",
+        type=float,
+        default=None,
+        help="sensor -> flight-computer latency [s] (default: controller.uplink_latency_s)",
+    )
+    hl.add_argument("--rate", type=float, help="controller tick rate [Hz]")
+    hl.add_argument("--seed", type=int, default=0)
+    hl.set_defaults(fn=cmd_hil)
+
+    vh = sub.add_parser(
+        "vehicle", help="derive and print mass properties / CG / inertia / CP / static margin of a vehicle"
+    )
+    vh.add_argument("source", help="vehicle .json or a simulation config")
+    vh.add_argument("--json", action="store_true")
+    vh.set_defaults(fn=cmd_vehicle)
 
     x = sub.add_parser("experiment", help="run / verify / list versioned dataset experiments")
     x.add_argument("file", nargs="?", help="experiment YAML (name, batch, optional master_seed)")

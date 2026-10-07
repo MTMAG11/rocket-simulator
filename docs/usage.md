@@ -75,6 +75,9 @@ class MyController:
 | `validate-registry [--split development\|calibration\|holdout\|all] [--confirm-frozen] [--set k=v] [--calibration-id ID] [--migrate-fingerprint]` | flight registry with the holdout protocol ([validation.md](validation.md)) |
 | `experiment FILE.yaml [--verify DIR] [--list]` | versioned, reproducible dataset experiments |
 | `check CONFIG` | validate a config |
+| `vehicle FILE [--json]` | derive and print mass properties, CG, inertia tensor, CP, static margin of a vehicle file or config ([vehicle_format.md](vehicle_format.md)) |
+| `timing CONFIG [--json]` | every rate, period and latency of the loop ([hil.md](hil.md)) |
+| `hil CONFIG [--replay LOG] [--command PROG ...] [--log LOG] [--uplink S]` | headless HIL run through the flight-computer protocol |
 | `schema [--json]`, `motors`, `gui` | schema, motor list, GUI |
 
 Exit codes: 0 ok, 1 error (message on stderr), 2 flight did not end normally, 130 interrupted (batch progress is kept).
@@ -110,3 +113,19 @@ estimator: {type: truth}                      # truth | nav_kf | none
 See [vehicle.md](vehicle.md), `configs/example_components.yaml` and `configs/domain_randomization.yaml`. A custom controller's
 `Command` has `tvc_y, tvc_z, fin_pitch, fin_yaw, fin_roll` (radians). Overrides are *dotted paths*
 (`rocket.inertia: {...}`); a nested mapping under a section name replaces the whole section.
+
+
+## Vehicle files, controller state source, HIL (V1.2)
+
+```yaml
+vehicle_file: ../vehicles/example_tvc_demo.json   # instead of a `rocket:` section (mutually exclusive)
+controller:
+  type: tvc_attitude        # none | tvc_attitude | schedule | python | hil
+  rate_hz: 100
+  state_source: estimate    # auto (default) | estimate (refuses without nav_kf at fidelity >= 5) | truth (recorded + warned)
+  compute_time_s: 0.002     # flight-computer compute time and downlink latency: delay before the actuator sees the command
+  downlink_latency_s: 0.001
+  uplink_latency_s: 0.0     # HIL bridge only
+  design_inertia_scale: 1.0 # flight computer's belief about I_yy/(T lever) relative to as-built (1 = perfect knowledge)
+# HIL: controller: {type: hil, params: {fc: reference}}   or   {command: [python, -m, rocket_sim.hil.flight_computer]}
+```

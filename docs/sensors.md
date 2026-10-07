@@ -3,6 +3,29 @@
 Status: **simulation only.** None of the sensor models or estimators has been compared with real flight data. Default
 parameters are generic MEMS orders of magnitude, not a datasheet.
 
+## 0. Architecture: truth -> measurement -> estimate (V1.2, verified)
+
+```
+TRUE STATE -> SENSOR MODELS -> MEASUREMENTS -> ESTIMATOR -> ESTIMATED STATE -> CONTROLLER
+                                    \-> (HIL) protocol v2 -> FLIGHT COMPUTER (its own estimator + controller)
+```
+
+* Sensors take the true state as input and return only what a sensor would report. The telemetry keeps them in separate columns
+  (`pos_*`/`fsp_*` truth; `meas_*` measurement; `est_*` estimate) and every column has a **role** in the schema.
+* Verified by tests (`tests/test_truth_separation.py`): an ideal sensor (all error terms zero) reads the **true specific force** exactly
+  and the imperfect one does not; noise statistics match the configured sigma; saturation clips the measurement but not the truth; the
+  barometer altitude is derived from pressure by ISA inversion; seeded realisations are reproducible and independent of the truth;
+  the navigation filter is never given a truth argument; and **replaying the logged measurements through a fresh filter reproduces
+  the logged estimates bit-for-bit**, which proves nothing else influenced them.
+* The controller is fed the estimate, or the truth only if `controller.use_truth` / `state_source: truth` says so (recorded in the run
+  metadata as `controller_state_source` and warned about). `state_source: estimate` refuses to start without an estimator.
+  A test shows the controller input equals the *logged estimate*, not the true state. **Caveat:** at fidelity < 5 there is no estimator
+  and `state_source: auto` falls back to truth (with a warning).
+* Estimator state exposed in the telemetry: position, velocity, attitude and the pad-estimated **gyro bias** (`est_gyro_bias_*`, tested
+  against the true pad bias to a few mrad/s). Accelerometer bias is not estimated, and attitude uncertainty is not in the filter.
+* Sensor realism not added in V1.2 because it could not be justified and tested: vibration, temperature dependence, g-sensitivity, GPS
+  multipath. What exists is in the table below.
+
 ## 1. Sensor audit
 
 | sensor | measures | model (`sensors/sensors.py`) | not modelled |

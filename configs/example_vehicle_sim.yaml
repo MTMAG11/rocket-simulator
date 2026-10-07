@@ -1,0 +1,13 @@
+# Simulation of the vehicle described in vehicles/example_tvc_demo.json (ILLUSTRATIVE placeholder vehicle).
+# The vehicle (geometry, components, masses, motor, parachutes) comes ONLY from the vehicle file; this file adds the
+# environment, launch, numerics and (optionally) the GNC loop.
+config_version: 1
+name: tvc-demo-sim
+fidelity: 3
+vehicle_file: ../vehicles/example_tvc_demo.json
+simulation: {dt_s: 0.01, descent_dt_s: 0.05, t_max_s: 400}
+environment:
+  atmosphere: {model: isa}
+  gravity: {model: inverse_square}
+  wind: {model: constant, speed_ms: 2.0, direction_from_deg: 270}
+launch: {elevation_deg: 90, azimuth_deg: 0, rail_length_m: 3.0}

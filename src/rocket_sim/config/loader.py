@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import tomllib
 from dataclasses import asdict
 from pathlib import Path
@@ -77,12 +78,59 @@ def apply_overrides(data: dict[str, Any], overrides: dict[str, Any]) -> dict[str
     return out
 
 
+def expand_vehicle_file(data: dict[str, Any], base_dir: Path) -> dict[str, Any]:
+    """Replace ``vehicle_file: path.json`` by the ``rocket`` / ``motor`` sections compiled from it.
+
+    The simulation file must not also define ``rocket`` (one source of truth for the vehicle); ``motor`` may add
+    ``thrust_scale`` etc. but not a different ``file``. The vehicle's SHA-256 is recorded in ``rocket.vehicle_source`` so a
+    record can always be traced to the exact file it was built from."""
+    from ..vehicle.vehicle_file import FORMAT_VERSION, load_vehicle
+
+    data = copy.deepcopy(data)
+    if "rocket" in data:
+        raise ConfigError(
+            "config: 'vehicle_file' and 'rocket' are mutually exclusive (one source of truth for the vehicle)"
+        )
+    ref = Path(str(data.pop("vehicle_file")))
+    path = ref if ref.is_absolute() else (base_dir / ref)
+    if not path.exists() and not ref.is_absolute():
+        alt = PROJECT_ROOT / ref
+        path = alt if alt.exists() else path
+    if not path.exists():
+        raise ConfigError(f"vehicle_file not found: {ref}")
+    v = load_vehicle(path)
+    rocket = copy.deepcopy(v.rocket)
+    rocket["vehicle_source"] = {
+        "file": path.name,
+        "sha256": v.sha256,
+        "format_version": FORMAT_VERSION,
+        "data_quality": v.data_quality,
+        "source": v.source,
+    }
+    data["rocket"] = rocket
+    mot = dict(data.get("motor", {}))
+    if "file" in mot and mot["file"] != v.motor["file"]:
+        raise ConfigError("config: motor.file conflicts with the vehicle file's motor (remove one)")
+    mot.update(v.motor)
+    # motor files in a vehicle file are relative to the vehicle file
+    mf = Path(mot["file"])
+    if not mf.is_absolute() and (path.parent / mf).exists():
+        try:  # keep it RELATIVE to the sim config so the config hash does not depend on the machine
+            mot["file"] = os.path.relpath((path.parent / mf).resolve(), base_dir.resolve()).replace("\\", "/")
+        except ValueError:  # different drive
+            mot["file"] = str((path.parent / mf).resolve())
+    data["motor"] = mot
+    return data
+
+
 def config_from_dict(
     data: dict[str, Any], base_dir: str | Path | None = None, overrides: dict[str, Any] | None = None
 ) -> SimConfig:
     """Parse + validate a config dict. ``base_dir`` resolves relative file paths."""
     if overrides:
         data = apply_overrides(data, overrides)
+    if "vehicle_file" in data:
+        data = expand_vehicle_file(data, Path(base_dir) if base_dir is not None else Path.cwd())
     cfg = from_dict(SimConfig, data)
     cfg.validate()
     cfg_base = Path(base_dir) if base_dir is not None else Path.cwd()

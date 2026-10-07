@@ -110,6 +110,9 @@ class AeroCfg:
     stall_angle_deg: float = 18.0  # enhanced model: fin lift stalls (saturates) near this angle of attack
     table2d_file: str | None = None  # table2d model: CSV with columns mach,alpha_deg,cd,cl[,cm]
     x_cm_ref_from_nose_m: float | None = None  # table2d: reference station of the cm column
+    provenance: dict[str, Any] | None = (
+        None  # user-declared provenance of table/table2d/constant data (kind, source, confidence, ...)
+    )
 
 
 @dataclass
@@ -136,6 +139,7 @@ class SectionCfg:
     shape: str = "ogive"  # nose profile
     mass_kg: float = 0.0
     cg_fraction: float = 0.5  # CG as a fraction of the length from the forward end
+    name: str = ""  # optional label used in mass reports (default: the section type)
 
 
 @dataclass
@@ -147,8 +151,14 @@ class MassItemCfg:
     position_from_nose_m: float = 0.0
     offset_y_m: float = 0.0  # lateral offset from the axis (body y, right)
     offset_z_m: float = 0.0  # lateral offset from the axis (body z, down)
-    ixx_kgm2: float = 0.0
+    ixx_kgm2: float = 0.0  # tensor about the item's own CG, body axes (x forward, y right, z down)
     iyy_kgm2: float = 0.0
+    izz_kgm2: float | None = None  # default: = iyy (axisymmetric)
+    ixy_kgm2: float = (
+        0.0  # PRODUCTS of inertia (integral x y dm); the tensor off-diagonals are their negatives
+    )
+    ixz_kgm2: float = 0.0
+    iyz_kgm2: float = 0.0
 
 
 @dataclass
@@ -192,6 +202,9 @@ class RocketCfg:
     motor_aft_from_nose_m: float | None = None  # nozzle exit plane; default = body_length_m
     aero: AeroCfg = field(default_factory=AeroCfg)
     parachutes: list[ParachuteCfg] = field(default_factory=list)
+    vehicle_source: dict[str, Any] | None = (
+        None  # {file, sha256, format_version, data_quality}: set when built from a vehicle file
+    )
 
 
 @dataclass
@@ -278,6 +291,15 @@ class ControllerCfg:
     type: str = "none"  # none | tvc_attitude | schedule | python
     rate_hz: float = 50.0
     use_truth: bool = False  # feed the controller TRUE state (testing only; logged in metadata)
+    state_source: str = (
+        "auto"  # auto | estimate | truth. 'estimate' REFUSES to start without an estimator (no silent truth)
+    )
+    design_inertia_scale: float = 1.0  # flight computer's belief about I_yy/(T lever) relative to the as-built vehicle (1 = perfect knowledge)
+    compute_time_s: float = (
+        0.0  # flight-computer compute time: extra delay before a command reaches the actuator
+    )
+    uplink_latency_s: float = 0.0  # HIL bridge only: sensor -> flight-computer transport latency
+    downlink_latency_s: float = 0.0  # command transport latency (adds to compute_time_s)
     params: dict[str, Any] = field(default_factory=dict)
 
 
@@ -369,7 +391,7 @@ class SimConfig:
             raise ConfigError("fast mode is only defined for fidelity <= 2")
         if (
             self.fidelity >= 5
-            and self.controller.type != "none"
+            and self.controller.type not in ("none", "hil")
             and self.estimator.type == "none"
             and not self.controller.use_truth
         ):
@@ -390,10 +412,33 @@ class SimConfig:
         _check(a.max_angle_deg >= 0 and a.max_rate_deg_s > 0, "tvc", "max_angle_deg >= 0, max_rate_deg_s > 0")
         _check(a.time_constant_s >= 0 and a.delay_s >= 0, "tvc", "time_constant_s/delay_s must be >= 0")
         _check(self.controller.rate_hz > 0, "controller.rate_hz", "must be > 0")
+        c = self.controller
         _check(
-            self.controller.type in ("none", "tvc_attitude", "schedule", "python"),
+            c.state_source in ("auto", "estimate", "truth"),
+            "controller.state_source",
+            "must be auto|estimate|truth",
+        )
+        _check(
+            min(c.compute_time_s, c.uplink_latency_s, c.downlink_latency_s) >= 0,
+            "controller",
+            "compute_time_s/uplink_latency_s/downlink_latency_s must be >= 0",
+        )
+        _check(c.design_inertia_scale > 0, "controller.design_inertia_scale", "must be > 0")
+        _check(
+            not (c.use_truth and c.state_source == "estimate"),
+            "controller.state_source",
+            "use_truth: true contradicts state_source: estimate",
+        )
+        if c.type not in ("none", "hil") and c.state_source == "estimate":
+            _check(
+                self.estimator.type == "nav_kf" and self.fidelity >= 5,
+                "controller.state_source",
+                "'estimate' needs estimator.type: nav_kf at fidelity >= 5 (sensors + estimator in the loop)",
+            )
+        _check(
+            self.controller.type in ("none", "tvc_attitude", "schedule", "python", "hil"),
             "controller.type",
-            "must be none|tvc_attitude|schedule|python",
+            "must be none|tvc_attitude|schedule|python|hil",
         )
         _check(
             self.estimator.type in ("none", "nav_kf", "truth"), "estimator.type", "must be none|nav_kf|truth"
@@ -403,6 +448,12 @@ class SimConfig:
             "sensors.magnetic_field_enu_t",
             "needs 3 components, not all zero",
         )
+        if self.estimator.type == "nav_kf" and self.fidelity >= 5:
+            _check(
+                self.sensors.accelerometer.enabled and self.sensors.magnetometer.enabled,
+                "estimator.type",
+                "nav_kf aligns attitude from the accelerometer AND the magnetometer: both must be enabled",
+            )
         if self.estimator.type != "none" and self.fidelity >= 5:
             _check(
                 self.motor.ignition_delay_s >= self.estimator.alignment_time_s,

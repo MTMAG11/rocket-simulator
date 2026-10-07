@@ -1,0 +1,1314 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/rocket-sim-vehicle-1.json",
+  "title": "rocket-sim vehicle file",
+  "description": "Version 1. Axial positions are metres AFT of the nose tip; body axes x forward, y right, z down. See docs/vehicle_format.md.",
+  "type": "object",
+  "required": [
+    "format",
+    "format_version",
+    "components",
+    "motor"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "rocket-sim-vehicle"
+    },
+    "format_version": {
+      "const": 1
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "author": {
+          "type": "string"
+        },
+        "created": {
+          "type": "string"
+        },
+        "data_quality": {
+          "enum": [
+            "design",
+            "measured",
+            "estimated",
+            "placeholder"
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "materials": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "properties": {
+        "reference_diameter_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/nose"
+          },
+          {
+            "$ref": "#/$defs/body_tube"
+          },
+          {
+            "$ref": "#/$defs/transition"
+          },
+          {
+            "$ref": "#/$defs/fin_set"
+          },
+          {
+            "$ref": "#/$defs/control_surface_set"
+          },
+          {
+            "$ref": "#/$defs/motor_mount"
+          },
+          {
+            "$ref": "#/$defs/avionics"
+          },
+          {
+            "$ref": "#/$defs/battery"
+          },
+          {
+            "$ref": "#/$defs/payload"
+          },
+          {
+            "$ref": "#/$defs/recovery"
+          },
+          {
+            "$ref": "#/$defs/ballast"
+          },
+          {
+            "$ref": "#/$defs/structure"
+          },
+          {
+            "$ref": "#/$defs/other"
+          }
+        ]
+      }
+    },
+    "motor": {
+      "type": "object",
+      "required": [
+        "file"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "aft_position_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "designation": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        }
+      }
+    },
+    "parachutes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "aero": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "nose": {
+      "type": "object",
+      "properties": {
+        "base_diameter_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "length_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "type": {
+          "const": "nose"
+        },
+        "wall_thickness_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "x_start_m": {
+          "type": "number",
+          "minimum": 0,
+          "description": "start of the section, aft of the nose tip [m]"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "body_tube": {
+      "type": "object",
+      "properties": {
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "diameter_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "length_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "type": {
+          "const": "body_tube"
+        },
+        "wall_thickness_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "x_start_m": {
+          "type": "number",
+          "minimum": 0,
+          "description": "start of the section, aft of the nose tip [m]"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "transition": {
+      "type": "object",
+      "properties": {
+        "aft_diameter_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "fore_diameter_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "length_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "type": {
+          "const": "transition"
+        },
+        "wall_thickness_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "x_start_m": {
+          "type": "number",
+          "minimum": 0,
+          "description": "start of the section, aft of the nose tip [m]"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "fin_set": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "root_chord_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "span_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "sweep_m": {
+          "type": "number"
+        },
+        "thickness_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "tip_chord_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "type": {
+          "const": "fin_set"
+        },
+        "x_root_le_m": {
+          "type": "number",
+          "description": "leading edge of the root chord, aft of the nose tip [m]"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "control_surface_set": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "delay_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "max_deflection_deg": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "max_rate_deg_s": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "roll_angle0_deg": {
+          "type": "number"
+        },
+        "root_chord_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "span_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "sweep_m": {
+          "type": "number"
+        },
+        "thickness_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "time_constant_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "tip_chord_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "type": {
+          "const": "control_surface_set"
+        },
+        "x_root_le_m": {
+          "type": "number",
+          "description": "leading edge of the root chord, aft of the nose tip [m]"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "motor_mount": {
+      "type": "object",
+      "properties": {
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "dimensions_m": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "box: [length_x, width_y, height_z]; cylinder: [length, diameter]"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "type": {
+          "const": "motor_mount"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "avionics": {
+      "type": "object",
+      "properties": {
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "dimensions_m": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "box: [length_x, width_y, height_z]; cylinder: [length, diameter]"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "type": {
+          "const": "avionics"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "battery": {
+      "type": "object",
+      "properties": {
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "dimensions_m": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "box: [length_x, width_y, height_z]; cylinder: [length, diameter]"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "type": {
+          "const": "battery"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "payload": {
+      "type": "object",
+      "properties": {
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "dimensions_m": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "box: [length_x, width_y, height_z]; cylinder: [length, diameter]"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "type": {
+          "const": "payload"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "recovery": {
+      "type": "object",
+      "properties": {
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "dimensions_m": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "box: [length_x, width_y, height_z]; cylinder: [length, diameter]"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "type": {
+          "const": "recovery"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "ballast": {
+      "type": "object",
+      "properties": {
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "dimensions_m": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "box: [length_x, width_y, height_z]; cylinder: [length, diameter]"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "type": {
+          "const": "ballast"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "structure": {
+      "type": "object",
+      "properties": {
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "dimensions_m": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "box: [length_x, width_y, height_z]; cylinder: [length, diameter]"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "type": {
+          "const": "structure"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "other": {
+      "type": "object",
+      "properties": {
+        "cg_x_m": {
+          "type": "number",
+          "description": "axial position of the component CG, aft of the nose tip [m]"
+        },
+        "dimensions_m": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "description": "box: [length_x, width_y, height_z]; cylinder: [length, diameter]"
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inertia_kgm2": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "description": "3x3 inertia TENSOR about the component's own CG, body axes (x forward, y right, z down); off-diagonals are minus the products of inertia"
+        },
+        "mass_kg": {
+          "type": "number",
+          "minimum": 0,
+          "description": "component mass [kg]; omit to derive from material + thickness"
+        },
+        "material": {
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "object",
+              "required": [
+                "density_kgm3"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "density_kgm3": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        },
+        "offset_m": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[y, z] CG offset from the axis, body axes (y right, z down) [m]"
+        },
+        "shape": {
+          "type": "string"
+        },
+        "type": {
+          "const": "other"
+        }
+      },
+      "required": [
+        "id",
+        "type"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

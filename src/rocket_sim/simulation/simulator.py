@@ -131,6 +131,50 @@ class Simulation:
                 self.warnings.append("vehicle is statically UNSTABLE at launch (cp ahead of cg)")
 
     # ------------------------------------------------------------------------------------------
+    def _design_data(self) -> dict:
+        """DESIGN knowledge handed to a flight computer: the nominal gimbal-authority schedule against time since ignition, gravity,
+        site elevation, launch axis and alignment time. Never the instantaneous true state."""
+        veh, cfg = self.vehicle, self.cfg
+        auth = self._controller_authority()
+        t_ign, burn = veh.ignition_delay, veh.motor.times[-1]
+        n = int(burn / 0.02) + 1
+        table = []
+        for k in range(n + 1):
+            tau = min(k * 0.02, burn)
+            v = auth(t_ign + tau)
+            table.append([tau, None if v is None else float(v)])
+        return {
+            "authority_since_ignition": table,
+            "gravity_m_s2": cfg.environment.gravity.g_ms2,
+            "site_elevation_m": float(self.env.site_elevation),
+            "launch_axis": [float(x) for x in self.dyn.rail_axis],
+            "alignment_time_s": cfg.estimator.alignment_time_s,
+            "magnetic_field_enu_t": list(cfg.sensors.magnetic_field_enu_t),
+        }
+
+    def _hil_init(self) -> dict | None:
+        """Content of the protocol ``init`` message (None below fidelity 4, where there are no sensors)."""
+        if not self.has_sensors:
+            return None
+        s = self.cfg.sensors
+        specs = {}
+        for name, attr in (
+            ("accel", "accelerometer"),
+            ("gyro", "gyroscope"),
+            ("baro", "barometer"),
+            ("gps", "gps"),
+            ("mag", "magnetometer"),
+        ):
+            c = getattr(s, attr)
+            if c.enabled:
+                specs[name] = {"rate_hz": c.rate_hz, "noise_std": c.noise_std, "latency_s": c.latency_s}
+        return {
+            "controller_rate_hz": self.cfg.controller.rate_hz,
+            "sensors": specs,
+            "design": self._design_data(),
+            "estimator": {"alignment_time_s": self.cfg.estimator.alignment_time_s},
+        }
+
     def _fin_authority(self):
         """Command-per-angular-acceleration for control surfaces, from the (estimated) dynamic pressure.
 
@@ -150,11 +194,24 @@ class Simulation:
                 return None
             rho = isa.at(site + inp.position[2]).density
             qs = 0.5 * rho * speed * speed * s_ref
-            mp = veh.mass_props(t)
+            tau = inp.t_since_launch
+            mp = veh.mass_props(
+                veh.ignition_delay + (tau if tau is not None else 0.0)
+            )  # indexed by time since launch
             gy, gz, gx = mixer.gain(1), mixer.gain(2), mixer.gain(0)
             if min(abs(gy), abs(gz)) < 1e-12:
                 return None
             return (mp.iyy / (qs * gy), mp.iyy / (qs * gz), (mp.ixx / (qs * gx)) if abs(gx) > 1e-12 else 0.0)
+
+        return authority
+
+    def _authority_since_ignition(self):
+        """Gimbal authority as a function of TIME SINCE (detected) LAUNCH: what a flight computer can index without the true clock."""
+        auth = self._controller_authority()
+        t_ign = self.vehicle.ignition_delay
+
+        def authority(tau: float) -> float | None:
+            return auth(t_ign + tau)
 
         return authority
 
@@ -166,6 +223,9 @@ class Simulation:
         """
         veh = self.vehicle
         scale = self.cfg.motor.thrust_scale
+        knowledge = (
+            self.cfg.controller.design_inertia_scale
+        )  # the flight computer's belief about I/(T lever), relative to as-built
         peak = veh.motor.max_thrust / scale
 
         def authority(t: float) -> float | None:
@@ -174,7 +234,7 @@ class Simulation:
                 return None
             mp = veh.mass_props(t)
             lever = abs(mp.x_cg - veh.nozzle_x)
-            return mp.iyy / (thrust * lever)
+            return knowledge * mp.iyy / (thrust * lever)
 
         return authority
 
@@ -229,13 +289,42 @@ class Simulation:
             self.controller.reset(
                 {
                     "authority": self._controller_authority(),
+                    "authority_since_ignition": self._authority_since_ignition(),
                     "fin_authority": self._fin_authority() if self.mixer is not None else None,
                     "launch_axis": dyn.rail_axis,
+                    "design": self._design_data(),
+                    "hil_init": self._hil_init(),
                 }
             )
         ctrl_period = 1.0 / cfg.controller.rate_hz
         next_ctrl = 0.0
-        use_truth_ctrl = cfg.controller.use_truth or not self.has_sensors or self.estimator is None
+        src_cfg = cfg.controller.state_source
+        use_truth_ctrl = (
+            cfg.controller.use_truth
+            or src_cfg == "truth"
+            or isinstance(self.estimator, TruthEstimator)
+            or (src_cfg == "auto" and (not self.has_sensors or self.estimator is None))
+        )
+        consumes_state = bool(getattr(self.controller, "consumes_state", True))
+        ctrl_state_source = (
+            "none"
+            if self.controller is None
+            else ("measurements_only" if not consumes_state else ("truth" if use_truth_ctrl else "estimate"))
+        )
+        if self.controller is not None and use_truth_ctrl and consumes_state:
+            self.warnings.append(
+                "controller is fed the TRUE state (use_truth / state_source=truth, or no sensors+estimator in the loop): "
+                "results do not represent a flight computer working from measurements"
+            )
+        if self.controller is not None:
+            self.flags.notes.append(f"controller_state_source={ctrl_state_source}")
+        wants_samples = bool(getattr(self.controller, "wants_samples", False)) and self.sensors is not None
+        if wants_samples:
+            assert self.sensors is not None
+            self.sensors.enable_collection()
+        cmd_latency = cfg.controller.compute_time_s + cfg.controller.downlink_latency_s
+        if hasattr(self.controller, "uplink_latency_s") and self.controller.uplink_latency_s is None:  # type: ignore[union-attr]
+            self.controller.uplink_latency_s = cfg.controller.uplink_latency_s  # type: ignore[union-attr]
 
         def log_event(name: str, tt: float, yy: np.ndarray, **extra: float) -> None:
             vx, vy, vz = float(yy[3]), float(yy[4]), float(yy[5])
@@ -310,6 +399,21 @@ class Simulation:
                 "sideslip": ev.beta,
                 "qdyn": ev.qdyn,
             }
+            if is6:
+                mp6 = veh.mass_props(tt)
+                row.update(
+                    {
+                        "izz": mp6.izz_eff,
+                        "ixy": mp6.ixy,
+                        "ixz": mp6.ixz,
+                        "iyz": mp6.iyz,
+                        "cg_y": mp6.y_cg,
+                        "cg_z": mp6.z_cg,
+                        "fsp_x": ev.spec_force[0],
+                        "fsp_y": ev.spec_force[1],
+                        "fsp_z": ev.spec_force[2],
+                    }
+                )
             if cfg.fidelity >= 3:
                 row["tvc_cmd_y"], row["tvc_cmd_z"] = self.actuator.cmd
                 row["tvc_y"], row["tvc_z"] = self.actuator.state
@@ -317,6 +421,7 @@ class Simulation:
                 row["fin_cmd_roll"], row["fin_cmd_pitch"], row["fin_cmd_yaw"] = last_fin_cmd
                 for i_, d_ in enumerate(self.fin_actuator.state):
                     row[f"fin_{i_}"] = d_
+                    row[f"fin_dcmd_{i_}"] = self.fin_actuator.cmd[i_]
             if self.has_sensors:
                 row.update(sensor_cols)
             if self.estimator is not None:
@@ -339,6 +444,9 @@ class Simulation:
                 "est_quat_x": e.quaternion[1],
                 "est_quat_y": e.quaternion[2],
                 "est_quat_z": e.quaternion[3],
+                "est_gyro_bias_x": e.extra.get("gyro_bias_x", 0.0),
+                "est_gyro_bias_y": e.extra.get("gyro_bias_y", 0.0),
+                "est_gyro_bias_z": e.extra.get("gyro_bias_z", 0.0),
             }
 
         while True:
@@ -365,6 +473,9 @@ class Simulation:
                     "meas_accel_x": rd.accel[0],
                     "meas_accel_y": rd.accel[1],
                     "meas_accel_z": rd.accel[2],
+                    "meas_accel_new": float(rd.accel_new),
+                    "meas_gyro_new": float(rd.gyro_new),
+                    "meas_mag_new": float(rd.mag_new),
                     "meas_gyro_x": rd.gyro[0],
                     "meas_gyro_y": rd.gyro[1],
                     "meas_gyro_z": rd.gyro[2],
@@ -394,7 +505,23 @@ class Simulation:
                     )
                 last_est = self.estimator.update(t, latest_readings, truth)
             if self.controller is not None and t >= next_ctrl - _EPS:
-                if use_truth_ctrl:
+                if (
+                    not consumes_state
+                ):  # e.g. a HIL bridge: the controller sees SENSOR SAMPLES only, never a state
+                    inp = ControlInput(
+                        t,
+                        None,
+                        False,
+                        (0.0, 0.0, 0.0),
+                        (0.0, 0.0, 0.0),
+                        (1.0, 0.0, 0.0, 0.0),
+                        (0.0, 0.0, 0.0),
+                        0,
+                        latest_readings,  # raw MEASUREMENTS are allowed; no state is
+                        self.sensors.drain() if wants_samples and self.sensors is not None else [],
+                        "none",
+                    )
+                elif use_truth_ctrl:
                     ts = (t - t_ign) if t >= t_ign else None
                     inp = ControlInput(
                         t,
@@ -406,6 +533,8 @@ class Simulation:
                         dyn.omega(y),
                         int(self.phases.phase),
                         latest_readings,
+                        self.sensors.drain() if wants_samples and self.sensors is not None else [],
+                        "truth",
                     )
                 else:
                     ts = (t - last_est.launch_time) if last_est.launch_time is not None else None
@@ -417,17 +546,22 @@ class Simulation:
                         last_est.velocity,
                         last_est.quaternion,
                         last_est.omega,
-                        int(self.phases.phase),
+                        2
+                        if last_est.launch_detected
+                        else 0,  # estimated: 0 = on the pad, 2 = launch detected (no true phase)
                         latest_readings,
+                        self.sensors.drain() if wants_samples and self.sensors is not None else [],
+                        "estimate",
                     )
                 cmd = self.controller.update(inp)
                 if not (math.isfinite(cmd.tvc_y) and math.isfinite(cmd.tvc_z)):
                     raise SimulationError(f"controller returned a non-finite command at t={t:.3f}")
-                self.actuator.command(t, Command(cmd.tvc_y, cmd.tvc_z))
+                # the command reaches the actuator after the flight computer's compute time and the downlink latency
+                self.actuator.command(t + cmd_latency, Command(cmd.tvc_y, cmd.tvc_z))
                 if self.fin_actuator is not None and self.mixer is not None:
                     if not all(math.isfinite(v) for v in (cmd.fin_roll, cmd.fin_pitch, cmd.fin_yaw)):
                         raise SimulationError(f"controller returned a non-finite fin command at t={t:.3f}")
-                    self.fin_actuator.command(t, self.mixer.mix(cmd))
+                    self.fin_actuator.command(t + cmd_latency, self.mixer.mix(cmd))
                     last_fin_cmd = (cmd.fin_roll, cmd.fin_pitch, cmd.fin_yaw)
                 while next_ctrl <= t + _EPS:
                     next_ctrl += ctrl_period
@@ -587,6 +721,28 @@ class Simulation:
 
         wall = _time.perf_counter() - wall0
         data = rec.finish()
+        prov = self.vehicle.aero.provenance
+        if prov is not None and data.shape[0] > 3:
+            cidx = {c: i for i, c in enumerate(columns)}
+            asc = (data[:, cidx["phase"]] < 5) & (
+                data[:, cidx["airspeed"]] > 20.0
+            )  # before apogee, flying (not the pad)
+            if (
+                asc.any()
+                and prov.mach_range is not None
+                and float(data[asc, cidx["mach"]].max()) > prov.mach_range[1] * 1.0001
+            ):
+                self.warnings.append(
+                    f"flight exceeded the stated Mach range of the aerodynamic model ({prov.model}: Mach {prov.mach_range[0]:g}-{prov.mach_range[1]:g}, "
+                    f"reached {float(data[asc, cidx['mach']].max()):.2f}); the coefficients are extrapolated, see docs/aerodynamics.md"
+                )
+            if asc.any() and prov.alpha_range_deg is not None and "aoa" in cidx:
+                amax = math.degrees(float(data[asc, cidx["aoa"]].max()))
+                if amax > prov.alpha_range_deg[1] * 1.0001:
+                    self.warnings.append(
+                        f"angle of attack reached {amax:.0f} deg before apogee, beyond the {prov.alpha_range_deg[1]:g} deg over which the "
+                        f"{prov.model} model is a linear-theory estimate (larger angles use the crossflow estimate)"
+                    )
         meta = RunMetadata(
             simulation_id=self.simulation_id,
             seed=self.seed,
@@ -605,6 +761,8 @@ class Simulation:
             config=config_to_dict(self.input_cfg),
             wall_time_s=wall,
             input_files=self.input_files,
+            aero_provenance=(self.vehicle.aero.provenance.to_dict() if self.vehicle.aero.provenance else {}),
+            controller_state_source=ctrl_state_source,
             n_steps=n_steps,
         )
         record = FlightRecord(columns, data, events, meta)

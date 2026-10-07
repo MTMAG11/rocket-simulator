@@ -39,6 +39,23 @@ CONFIG (YAML/JSON/TOML) --validate--> SimConfig --resolve_fidelity--> builders
                                                   ACTUATOR (delay, lag, rate/angle limits) -> gimbal angle --> DYNAMICS
 ```
 
+### Truth, measurement, estimate, command, actual (V1.2)
+
+Every column in the telemetry has exactly one **role** (`rocket_sim.data.schema.role_of`): `truth` (the simulator's state,
+environment and mass properties), `measurement` (`meas_*`), `estimate` (`est_*`), `command` (`tvc_cmd_*`, `fin_cmd_*`, `fin_dcmd_*`) or
+`actual` (`tvc_*`, `fin_*`: the physical actuator state the physics used). The controller is handed a `ControlInput` whose
+`state_source` is `estimate` (the flight-computer state) or `truth` (an explicit development shortcut that is **recorded in the run
+metadata and warned about**); a controller that consumes only sensor samples (the HIL bridge) is never handed a state. The estimator is
+given measurements only (a test replays the logged measurements through a fresh filter and reproduces its estimates bit-for-bit).
+Known leak that remains by design: the controller's authority/gain schedule is derived from the as-built mass properties (a flight
+computer is assumed to know its as-designed vehicle).
+
+```
+physics (truth) -> sensors -> [measurements] -> estimator -> [estimate] -> controller -> [command] -> (compute + downlink latency)
+   ^                                                  (or: [measurements] -> HIL protocol -> flight computer -> [command])      |
+   +---------------------- [actual actuator state] <- actuator (delay, lag, rate, angle limits) <-----------------------------+
+```
+
 The physics never imports control code: `Simulation.run` owns the loop and passes only a `Controls` object (gimbal
 angles) into the dynamics. A controller is any object with `reset(ctx)` and `update(ControlInput) -> Command`
 (`rocketsim` config `controller.type: python`), so a neural network or a hardware-in-the-loop serial bridge
@@ -60,6 +77,9 @@ angles) into the dynamics. A controller is any object with `reset(ctx)` and `upd
 | `data` | telemetry schema, export (CSV/JSON/NPZ/Parquet), Monte Carlo (copula, linked parameters), quality gates, leakage checks and statistics, dataset/windowing, parallel batch engine, dataset browser |
 | `validation` | standard telemetry, real-flight import, metrics, comparison, calibration, flight registry + holdout log, input-uncertainty Monte Carlo, sensitivity/error budget |
 | `ui` | PySide6 GUI (thin client of the engine) |
+| `hil` | HIL protocol v2, transports (loopback, pipe, record/replay), the simulator-side bridge, flight-computer contract and a Python reference flight computer ([hil.md](hil.md)) |
+| `vehicle/vehicle_file.py`, `vehicle/report.py` | the versioned vehicle file -> `rocket` config compiler and the derived mass-properties report ([vehicle_format.md](vehicle_format.md)) |
+| `simulation/timing.py` | explicit timing report (rates, latencies, derived end-to-end latency) |
 | `experiments.py` | versioned dataset experiments (provenance record, reproduction check) |
 | `cli.py`, `benchmark.py`, `plotting.py`, `reporting.py`, `uncertainty.py` | front ends and helpers |
 

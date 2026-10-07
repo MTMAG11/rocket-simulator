@@ -1,7 +1,7 @@
 # Testing
 
 ```bash
-pytest                      # 294 tests (3 real-flight regression tests are marked slow)
+pytest                      # ~430 tests (3 real-flight regression tests are marked slow)
 pytest -m "not slow"        # skip the slow tests
 ruff check src tests && ruff format --check src tests
 mypy src/rocket_sim
@@ -44,3 +44,13 @@ latency ignored by the filter, off-by-one handling of loop variables in the even
   refused when a logged result does not reproduce - a detector that cannot fail proves nothing.
 * Numbers quoted in the documentation are guarded: `test_logged_holdout_results_match_the_documented_numbers`,
   `test_recorded_input_mc_results_are_consistent`, `test_calibration_flight_regression`, `test_golden.py`.
+
+
+## V1.2 additions
+
+| file | what it verifies |
+|---|---|
+| `test_vehicle_file.py` | component mass summation, CG and full inertia tensor against independent numpy summation, shell/plate/shape formulas, tensor sign convention, off-axis components, CG travel during the burn, geometry placement, boat-tail, all validation errors, determinism, traceability, machine-independent config hash, equivalence with a hand-written config, JSON-schema consistency, CLI |
+| `test_truth_separation.py` | estimator never given truth; **bit-exact replay of logged measurements through a fresh filter**; controller input equals the logged estimate, not the truth; state-source flags and refusals; ideal sensor == true specific force; noise statistics; saturation; barometer derivation; seeded determinism; column roles |
+| `test_aero_provenance.py` | provenance for every model, estimate never labelled measured, declared Re dependence matches behaviour, dataset/record propagation, coefficient bounds and consistency over the whole envelope, Barrowman hand calculation + regression pins, RocketPy cross-check of the example vehicle |
+| `test_hil_v12.py` | protocol encoding/validation, lock-step loop, every sample delivered, no truth across the boundary, uplink and compute/downlink latency, bit-identical live runs, replay without a flight computer and divergence detection, child-process transport == in-process, dead process, closed-loop stabilisation and latency degradation, timing report, CLI |

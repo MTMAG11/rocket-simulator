@@ -53,6 +53,7 @@ from ..vehicle.aero import (
     EnhancedAero,
     SimplifiedAero,
     Table2DAero,
+    default_provenance,
 )
 from ..vehicle.assembly import Assembly, ControlSurfaceSet, Section, legacy_assembly
 from ..vehicle.mass import solid_cylinder_inertia, thin_tube_inertia
@@ -234,6 +235,36 @@ def _table_aero_from(
 
 
 def _build_aero(cfg: SimConfig, asm: Assembly, motor: Motor, fast: bool) -> AerodynamicModel:
+    """Build the configured model and attach its PROVENANCE (what the numbers are, where they came from)."""
+    a = cfg.rocket.aero
+    m = _build_aero_model(cfg, asm, motor, fast)
+    name = "barrowman" if a.model == "buildup" else a.model
+    mach_range = None
+    alpha_range = None
+    if a.model == "table" and a.cd_table:
+        ms = [row[0] for row in a.cd_table]
+        mach_range = (min(ms), max(ms))
+    elif a.model == "table2d":
+        ms2 = getattr(m, "m", None)
+        if ms2:
+            mach_range = (float(min(ms2)), float(max(ms2)))
+        als = getattr(m, "a", None)
+        if als:
+            alpha_range = (
+                math.degrees(float(min(als))),
+                math.degrees(float(max(als))),
+            )  # beyond this the last row is HELD
+    m.provenance = default_provenance(
+        name,
+        a.provenance,
+        mach_range,
+        alpha_range,
+        stability_supplied=(a.cn_alpha is not None or a.x_cp_from_nose_m is not None),
+    )
+    return m
+
+
+def _build_aero_model(cfg: SimConfig, asm: Assembly, motor: Motor, fast: bool) -> AerodynamicModel:
     a = cfg.rocket.aero
     noz = a.nozzle_exit_ratio * motor.diameter
     if noz >= asm.base_diameter:
@@ -358,10 +389,10 @@ def build_vehicle(cfg: SimConfig, motor: Motor | None = None, fast: bool | None 
     mx = nozzle_x - 0.5 * motor.length  # motor centre
     comps: list[MassComponent] = []
     if r.sections:
-        for sec in asm.sections:
+        for sec, scfg in zip(asm.sections, r.sections, strict=True):
             if sec.mass > 0:
                 ixx, iyy = thin_tube_inertia(sec.mass, sec.mean_radius, sec.length)
-                comps.append(MassComponent(sec.kind, sec.mass, sec.x_cg, ixx, iyy))
+                comps.append(MassComponent(scfg.name or sec.kind, sec.mass, sec.x_cg, ixx, iyy))
                 notes.append(f"inertia of the {sec.kind} section is a thin-shell ESTIMATE")
         if r.fins.mass_kg > 0 and r.fins.count:
             f_ = asm.fins
@@ -424,6 +455,10 @@ def build_vehicle(cfg: SimConfig, motor: Motor | None = None, fast: bool | None 
                     item.iyy_kgm2,
                     item.offset_y_m,
                     item.offset_z_m,
+                    item.izz_kgm2,
+                    item.ixy_kgm2,
+                    item.ixz_kgm2,
+                    item.iyz_kgm2,
                 )
             )
     cixx, ciyy = thin_tube_inertia(motor.casing_mass, 0.5 * motor.diameter, motor.length)

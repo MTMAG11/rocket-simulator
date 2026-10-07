@@ -14,5 +14,6 @@ Validation: ndrt_2020
   velocity             n=  342  RMSE   14.316  MAE   11.284  max|e|   44.717  bias  +10.206  NRMSE  8.67 %
   axial accel          n= 1819  RMSE    7.826  MAE    5.555  max|e|   27.259  bias   +4.117  NRMSE 10.27 %
   note: simulated altitude compared as: barometric
+  note: alignment check: ascent-altitude RMSE 116.3 m at the applied shift, 85.1 m at an extra shift of +0.825 s (the applied alignment is NOT tuned to the RMSE)
   note: real velocity derived from altitude (0.6 s local quadratic fit); not independent data
   note: axial-accel time base aligned independently (first >2 g sample); differs from the altimeter alignment by -0.159 s

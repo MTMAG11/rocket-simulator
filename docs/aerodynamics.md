@@ -8,7 +8,7 @@ All aerodynamic models implement one interface (`vehicle/aero.py::AerodynamicMod
 | `aero.model` | what it is | needs | use it for |
 |---|---|---|---|
 | `simplified` | one flat Cd (user value) + Barrowman CNa/CP from the geometry | `aero.cd` | quick studies, when only a drag number is known |
-| `barrowman` (alias `buildup`) | Barrowman normal force/CP (Mach-independent) + component drag build-up (Re, Mach, roughness, base, boat-tail, transitions). **Default; the V1 model, generalised** | geometry | the validated baseline |
+| `barrowman` (alias `buildup`) | Barrowman normal force/CP (Mach-independent) + component drag build-up (Re, Mach, roughness, base, boat-tail, transitions). **Default; the V1 model, generalised** | geometry | the baseline (apogee agreement with 7 flights only; [validation.md](validation.md)) |
 | `enhanced` | `barrowman` + Mach-dependent fin lift slope and fin CP, fin stall, transonic/supersonic fin wave drag | geometry, `aero.stall_angle_deg` | supersonic or high-alpha flight; **not flight-validated** |
 | `table` | Cd(Mach) lookup (coast and powered) + geometry-derived (or supplied) CNa/CP | `aero.cd_table` | a team's RASAero / wind-tunnel curve |
 | `table2d` | full CD/CL/CM over Mach x alpha from a CSV (`mach,alpha_deg,cd,cl[,cm]`, complete grid, bilinear) | `aero.table2d_file` | **the CFD / wind-tunnel interface** (future CFD plugs in here) |
@@ -65,6 +65,34 @@ along the relative wind; the normal-force moment about the CG has the restoring 
 magnitude; drag equals `q S CD` in the wind axes; `CL(alpha)` and `CD(alpha)` obey the small-angle limits and are symmetric
 about 90 deg for a symmetric body. Reynolds trends: smooth finless airframes get lower Cf at higher Re until the roughness
 cut-off. Mach: skin-friction, base and wave components each tested.
+
+## 5b. Provenance of every coefficient (V1.2)
+
+Every model carries an `AeroProvenance` (`vehicle.aero.provenance`), stored in each flight record (`meta.aero_provenance`) and as
+`aero_provenance_kind` / `aero_model` in dataset `runs.parquet`. It states, **separately for drag, normal force / CP and damping**, the
+`kind` (`analytical`, `barrowman`, `empirical`, `imported_table`, `experimental`, `cfd`, `user_defined`), the source, a stated confidence
+(low / medium / high / unknown: a judgement, not computed), the applicable Mach and angle-of-attack ranges, and **how Reynolds
+number enters**:
+
+| model | drag | normal force / CP | damping | Reynolds |
+|---|---|---|---|---|
+| `barrowman` | empirical build-up (medium; stated Mach 0-0.9) | Barrowman (medium) | strip theory (low) | skin friction only |
+| `enhanced` | build-up + Ackeret fin wave drag (**low**; "no real-flight validation") | Barrowman | strip theory | skin friction only |
+| `simplified`, `constant` | user's number | Barrowman (or supplied) | strip theory | none |
+| `table`, `table2d` | **user-declared** via `aero.provenance: {kind, source, confidence}`; undeclared = `user_defined`, source "no declared provenance" | Barrowman unless supplied | strip theory | none (no Re axis in the data) |
+
+The dataset label `aero_provenance_kind` is `estimate` (everything estimated here), `mixed` (some supplied, some estimated) or
+`imported` (currently unreachable because damping is always estimated). A declared `experimental`/`cfd` drag table therefore still gives
+`mixed` and never reads as "measured". Tests check that the declared Reynolds dependence matches actual behaviour (Cd changes with Re for
+the build-up only; CNa and CP never; table/constant models are exactly Re-independent).
+
+**Ranges are enforced as warnings.** After every run the simulator compares the Mach number and angle of attack reached before apogee with the model's stated range
+(barrowman: Mach 0-0.9 and 15 degrees of linear-theory angle of attack; enhanced: Mach 0-2) and adds a run warning if they were exceeded. The ranges are
+judgements, not validated bounds, and a user-declared `experimental`/`cfd` kind is a statement that is not checked.
+
+**Large-angle note.** The crossflow force acts at the planform centroid, which can be ahead of the CG, so at larger angles of attack
+(and in the enhanced model at high Mach, where fin lift falls) the pitching moment can turn destabilising even with a positive static
+margin: the coefficient tests assert restoring moments only up to 10 degrees.
 
 ## 6. Accuracy summary (honest)
 

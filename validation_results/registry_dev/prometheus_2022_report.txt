@@ -11,3 +11,4 @@ Validation: prometheus_2022
   altitude (descent)   n= 2381  RMSE  133.908  MAE  124.631  max|e|  215.593  bias -124.631  NRMSE  3.50 %
   velocity             n= 2992  RMSE   10.740  MAE   10.049  max|e|   12.793  bias   -9.358  NRMSE  3.38 %
   note: simulated altitude compared as: barometric
+  note: alignment check: ascent-altitude RMSE 146.9 m at the applied shift, 112.5 m at an extra shift of +0.600 s (the applied alignment is NOT tuned to the RMSE)

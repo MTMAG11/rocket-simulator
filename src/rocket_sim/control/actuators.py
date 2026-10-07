@@ -15,8 +15,8 @@ Not modelled: backlash, deadband, quantisation, load-dependent torque limits, po
 
 from __future__ import annotations
 
+import bisect
 import math
-from collections import deque
 from dataclasses import dataclass
 
 from ..config.schema import ActuatorCfg
@@ -50,21 +50,23 @@ class ActuatorBank:
         self.state = [0.0] * n  # physical actuator positions
         self.cmd = [0.0] * n  # latest (saturated) command issued
         self._effective = [0.0] * n
-        self._queue: list[deque[tuple[float, float]]] = [deque() for _ in range(n)]
+        self._queue: list[list[tuple[float, float]]] = [[] for _ in range(n)]  # kept sorted by due time
 
     def command(self, t: float, values: list[float]) -> None:
         for i, v in enumerate(values):
             a = self.max_angle[i]
             v = min(max(v, -a), a)
             self.cmd[i] = v
-            self._queue[i].append((t + self.delay[i], v))
+            bisect.insort(
+                self._queue[i], (t + self.delay[i], v), key=lambda e: e[0]
+            )  # stable: equal due times keep order
 
     def step(self, t: float, h: float) -> None:
         """Advance every channel from t to t + h."""
         for i in range(self.n):
             q = self._queue[i]
             while q and q[0][0] <= t + 1e-12:
-                self._effective[i] = q.popleft()[1]
+                self._effective[i] = q.pop(0)[1]
             gain = 1.0 if self.tau[i] <= 0 else 1.0 - math.exp(-h / self.tau[i])
             lim = self.max_rate[i] * h
             d = (self._effective[i] - self.state[i]) * gain

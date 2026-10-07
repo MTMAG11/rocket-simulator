@@ -11,6 +11,7 @@ DATASET_VERSION  dataset directory / manifest layout.
 
 SIM_VERSION = "0.2.0"
 PHYSICS_VERSION = "1.2.1"
-SCHEMA_VERSION = "1.1.0"  # 1.1.0: control-surface columns, estimator columns from fidelity 3
+SCHEMA_VERSION = "1.2.0"  # 1.2.0: full inertia tensor, true specific force, CG offsets, estimated gyro bias, per-fin commands, roles
+# (1.1.0: control-surface columns, estimator columns from fidelity 3)
 CONFIG_VERSION = 1
 DATASET_VERSION = "1.1.0"  # manifest/dataset layout (V1.1: statistics, leakage report, traceability ids)

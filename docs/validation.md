@@ -188,7 +188,7 @@ tip-off effects that are not modelled. Required next step: a weighed Estes/Aerot
 
 ## 8. Earlier (V1) material that still stands
 
-* Analytic and unit validation (`tests/`, 294 tests): free fall, vacuum projectile, Tsiolkovsky with gravity, quadratic
+* Analytic and unit validation (`tests/`, ~430 tests): free fall, vacuum projectile, Tsiolkovsky with gravity, quadratic
   drag fall, torque-free precession, constant-rate quaternion integration, weathercock frequency, TVC torque, ISA table,
   motor impulse, integrator order, quaternion identities, and since V1.1: Barrowman by hand, inertia tensor vs independent
   summation, Euler equations for asymmetric bodies, control-surface force/moment analytics, mixer decoupling, actuator
