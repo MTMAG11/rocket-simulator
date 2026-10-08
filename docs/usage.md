@@ -98,10 +98,12 @@ uncertainties (`rocket_sim/uncertainty.py`).
 CSV/Parquet/JSON). *Advanced settings* (collapsed) hold dry mass, thrust scale, azimuth, temperature offset, site elevation,
 fidelity, timestep, integrator and seed. Every run is written automatically to `<workspace>/output/gui_runs/<time>_<config>/`
 (`telemetry.csv`, `summary.txt`, `flight_overview.png`); the workspace is the repository (source) or `Documents\RocketSimulator`
-(executable), overridable with `ROCKETSIM_WORKSPACE`. The runs go in a background thread; the tabs hold the *Getting started* page
-(version, how it was launched, where files are, the last run), stacked zoomable graphs of any schema variables with event
-markers, a timeline scrubber with a 3-D view (orientation, trajectory, ground, wind arrow; coloured by flight phase), the Summary
-and the Data browser (open a dataset directory, reproduce and plot one run). Large generation is headless only.
+(executable), overridable with `ROCKETSIM_WORKSPACE`. A strip of key results (apogee, max speed, Mach, burnout, flight time, landing distance) appears after a run. Tabs: *Getting started*;
+*Graphs* (channels grouped as Trajectory, Velocity, Acceleration, Attitude, Forces, Mass and stability, Atmosphere, Control, Sensors,
+Estimation; each has a readable title and unit, with presets, search, a time-range selector and event markers; the cursor follows the
+timeline); *3D view* (orbit with left drag, pan with right drag, wheel to zoom, double-click to reset, Isometric/Side/Top buttons,
+Follow rocket; true-scale ground grid, trajectory coloured by flight phase, thrust and wind markers); *Summary*; *Data browser*
+(open a dataset directory, reproduce and plot one run). Play animates the timeline at 1-50x. Large generation is headless only.
 
 Launcher options: `python -m rocket_sim --version`, `--check` (data files and GUI library present?), `--self-test report.json`
 (start the GUI off-screen, run the default vehicle, write a JSON report; used to test the executable). Errors that have a

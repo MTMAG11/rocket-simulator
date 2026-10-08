@@ -14,18 +14,14 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
-from matplotlib.figure import Figure
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import Qt
 
 from ..config import apply_overrides, config_from_dict, config_to_dict, load_config
 from ..data.export import export_record
-from ..data.schema import column, columns_for
 from ..errors import RocketSimError
-from ..plotting import COLORS, EVENT_STYLE
-from ..reporting import summary_text
+from ..plotting import EVENT_STYLE
+from ..reporting import summary_rows, summary_text
 from ..resources import (
     APP_NAME,
     app_version,
@@ -38,19 +34,9 @@ from ..resources import (
 from ..simulation import FlightPhase, Simulation
 from ..simulation.record import FlightRecord
 from .catalog import VehicleEntry, list_motors, list_vehicles, save_run_results
+from .graphs import GraphPanel
 from .styles import MAIN_STYLE
-
-DEFAULT_PLOTS = ["altitude", "speed", "thrust"]
-PHASE_COLORS = {
-    0: "#999999",
-    1: "#E69F00",
-    2: "#D55E00",
-    3: "#CC79A7",
-    4: "#0072B2",
-    5: "#009E73",
-    6: "#56B4E9",
-    7: "#000000",
-}
+from .view3d import Trajectory3DView
 
 
 class SimWorker(QtCore.QObject):
@@ -206,6 +192,11 @@ class MainWindow(QtWidgets.QMainWindow):
         root.addWidget(left)
 
         right = QtWidgets.QVBoxLayout()
+        self.key_results = QtWidgets.QLabel("")
+        self.key_results.setObjectName("key_results")
+        self.key_results.setTextFormat(Qt.TextFormat.RichText)
+        self.key_results.setVisible(False)
+        right.addWidget(self.key_results)
         self.tabs = QtWidgets.QTabWidget()
         self.tabs.addTab(self._build_start_tab(), "Getting started")
         self.tabs.addTab(self._build_graph_tab(), "Graphs")
@@ -218,12 +209,24 @@ class MainWindow(QtWidgets.QMainWindow):
         right.addWidget(self.tabs, 1)
 
         tl = QtWidgets.QHBoxLayout()
-        tl.addWidget(QtWidgets.QLabel("Time:"))
+        self.play_button = QtWidgets.QPushButton("Play")
+        self.play_button.setFixedWidth(70)
+        self.play_button.clicked.connect(self._toggle_play)
+        self.speed_box = QtWidgets.QComboBox()
+        for label, factor in (("1x", 1.0), ("5x", 5.0), ("20x", 20.0), ("50x", 50.0)):
+            self.speed_box.addItem(label, factor)
+        self.speed_box.setCurrentIndex(1)
+        self.speed_box.setMinimumWidth(70)
+        tl.addWidget(self.play_button)
+        tl.addWidget(self.speed_box)
+        self.timer = QtCore.QTimer(self)
+        self.timer.setInterval(33)
+        self.timer.timeout.connect(self._advance)
         self.slider = QtWidgets.QSlider(Qt.Orientation.Horizontal)
         self.slider.valueChanged.connect(self._on_scrub)
         tl.addWidget(self.slider, 1)
         self.time_label = QtWidgets.QLabel("-")
-        self.time_label.setMinimumWidth(160)
+        self.time_label.setMinimumWidth(190)
         tl.addWidget(self.time_label)
         right.addLayout(tl)
         self.readout = QtWidgets.QLabel("Run a simulation to begin.")
@@ -309,32 +312,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.motor_label.setText(self.motor_info.get(self.motor_box.currentData(), "custom motor file"))
 
     def _build_graph_tab(self) -> QtWidgets.QWidget:
-        w = QtWidgets.QWidget()
-        h = QtWidgets.QHBoxLayout(w)
-        self.var_list = QtWidgets.QListWidget()
-        self.var_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.ExtendedSelection)
-        self.var_list.setMaximumWidth(250)
-        self.var_list.itemSelectionChanged.connect(self.update_graph)
-        h.addWidget(self.var_list)
-        v = QtWidgets.QVBoxLayout()
-        self.figure = Figure(layout="constrained")
-        self.canvas = FigureCanvas(self.figure)
-        v.addWidget(NavigationToolbar2QT(self.canvas, w))  # zoom / pan / home
-        v.addWidget(self.canvas, 1)
-        h.addLayout(v, 1)
-        self.cursor_lines: list[Any] = []
-        return w
+        self.graphs = GraphPanel()
+        return self.graphs
 
     def _build_3d_tab(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
         v = QtWidgets.QVBoxLayout(w)
-        self.fig3d = Figure(layout="constrained")
-        self.canvas3d = FigureCanvas(self.fig3d)
-        v.addWidget(NavigationToolbar2QT(self.canvas3d, w))
-        v.addWidget(self.canvas3d, 1)
-        self.ax3d = self.fig3d.add_subplot(111, projection="3d")
-        self._rocket_line = None
-        self._wind_arrow = None
+        v.setContentsMargins(0, 0, 0, 0)
+        bar = QtWidgets.QHBoxLayout()
+        self.view3d = Trajectory3DView()
+        for text, az, el in (("Isometric", None, None), ("Side (from south)", 0.0, 0.0), ("Top", 0.0, 89.0)):
+            b = QtWidgets.QPushButton(text)
+            b.clicked.connect(lambda _=False, az=az, el=el: self.view3d.reset_view(az, el))
+            bar.addWidget(b)
+        self.follow_box = QtWidgets.QCheckBox("Follow rocket")
+        self.follow_box.toggled.connect(self.view3d.set_follow)
+        bar.addWidget(self.follow_box)
+        bar.addStretch(1)
+        v.addLayout(bar)
+        v.addWidget(self.view3d, 1)
         return w
 
     def _build_browser_tab(self) -> QtWidgets.QWidget:
@@ -395,22 +391,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dt.setValue(d["simulation"]["dt_s"])
         self.integrator.setCurrentText(d["simulation"]["integrator"])
         self.seed.setValue(d["simulation"]["seed"] or 0)
-        self._populate_vars(d["fidelity"])
-
-    def _populate_vars(self, fidelity: int) -> None:
-        keep = {i.data(Qt.ItemDataRole.UserRole) for i in self.var_list.selectedItems()} or set(DEFAULT_PLOTS)
-        self.var_list.blockSignals(True)
-        self.var_list.clear()
-        for c in columns_for(fidelity, estimator=fidelity >= 5):
-            if c.name in ("t", "dt", "phase"):
-                continue
-            it = QtWidgets.QListWidgetItem(f"{c.name}  [{c.unit}]")
-            it.setData(Qt.ItemDataRole.UserRole, c.name)
-            it.setToolTip(c.description)
-            self.var_list.addItem(it)
-            if c.name in keep:
-                it.setSelected(True)
-        self.var_list.blockSignals(False)
 
     def current_dict(self) -> dict[str, Any]:
         d = copy.deepcopy(self.base_dict)
@@ -500,9 +480,53 @@ class MainWindow(QtWidgets.QMainWindow):
             f"Done: {rec.meta.n_steps} steps in {rec.meta.wall_time_s:.2f} s, status {rec.meta.status}"
         )
 
+    def _update_key_results(self, rec: FlightRecord) -> None:
+        rows = dict(summary_rows(rec))
+        items = (
+            ("Apogee", "Apogee (AGL)"),
+            ("Max speed", "Max velocity"),
+            ("Max Mach", "Max Mach"),
+            ("Burnout", "Burnout time"),
+            ("Flight time", "Total flight time"),
+            ("Landing distance", "Landing distance from pad"),
+        )
+        cells = "".join(
+            f"<td style='padding-right:26px'><span style='color:#9aa0aa;font-size:9pt'>{name}</span><br>"
+            f"<span style='font-size:13pt;font-weight:bold'>{rows.get(key, 'n/a')}</span></td>"
+            for name, key in items
+        )
+        self.key_results.setText(f"<table><tr>{cells}</tr></table>")
+        self.key_results.setVisible(True)
+
+    def _toggle_play(self) -> None:
+        if self.timer.isActive():
+            self.timer.stop()
+            self.play_button.setText("Play")
+            return
+        if self.record is None:
+            return
+        if self.slider.value() >= self.slider.maximum():
+            self.slider.setValue(0)
+        self.timer.start()
+        self.play_button.setText("Pause")
+
+    def _advance(self) -> None:
+        rec = self.record
+        if rec is None:
+            self.timer.stop()
+            return
+        t = rec.col("t")
+        target = t[self.slider.value()] + 0.033 * float(self.speed_box.currentData())
+        i = int(np.searchsorted(t, target))
+        if i >= self.slider.maximum():
+            self.slider.setValue(self.slider.maximum())
+            self.timer.stop()
+            self.play_button.setText("Play")
+        else:
+            self.slider.setValue(max(i, self.slider.value() + 1))
+
     def set_record(self, rec: FlightRecord) -> None:
         self.record = rec
-        self._populate_vars(rec.meta.fidelity)
         self.export_button.setEnabled(True)
         self.summary_text.setPlainText(summary_text(rec))
         self.slider.blockSignals(True)
@@ -515,8 +539,9 @@ class MainWindow(QtWidgets.QMainWindow):
             if e.name in EVENT_STYLE
         ]
         self.events_label.setText("Events: " + "   |   ".join(ev))
-        self.update_graph()
-        self.draw_3d_static()
+        self.graphs.set_record(rec)
+        self.view3d.set_record(rec)
+        self._update_key_results(rec)
         self._on_scrub(0)
 
     def open_results_folder(self) -> None:
@@ -536,105 +561,21 @@ class MainWindow(QtWidgets.QMainWindow):
             paths = export_record(self.record, d, formats=("csv", "parquet", "json"))
             self.statusBar().showMessage("Wrote " + ", ".join(p.name for p in paths))
 
-    def selected_vars(self) -> list[str]:
-        return [i.data(Qt.ItemDataRole.UserRole) for i in self.var_list.selectedItems()]
-
-    def update_graph(self) -> None:
-        self.figure.clear()
-        self.cursor_lines = []
-        rec = self.record
-        if rec is None:
-            self.canvas.draw_idle()
-            return
-        names = [n for n in self.selected_vars() if rec.has(n)] or ["altitude"]
-        axs = self.figure.subplots(len(names), 1, sharex=True)
-        axs = np.atleast_1d(axs)
-        t = rec.col("t")
-        for i, (ax, n) in enumerate(zip(axs, names)):
-            ax.plot(t, rec.col(n), color=COLORS[i % len(COLORS)], lw=1.2)
-            ax.set_ylabel(f"{n}\n[{column(n).unit}]", fontsize=8)
-            ax.grid(alpha=0.3)
-            for e in rec.events:
-                if e.name in EVENT_STYLE:
-                    ax.axvline(e.t, color=EVENT_STYLE[e.name][1], lw=0.8, ls=":")
-            self.cursor_lines.append(ax.axvline(t[0], color="#ffffff", lw=1.0))
-        axs[-1].set_xlabel("time [s]")
-        self.canvas.draw_idle()
-
     def _on_scrub(self, i: int) -> None:
         rec = self.record
         if rec is None:
             return
         t = rec.col("t")[i]
-        for ln in self.cursor_lines:
-            ln.set_xdata([t, t])
-        self.canvas.draw_idle()
-        ph = FlightPhase(int(rec.col("phase")[i])).name
-        self.time_label.setText(f"{t:8.3f} s   {ph}")
+        self.graphs.set_index(i)
+        self.view3d.set_index(i)
+        ph = FlightPhase(int(rec.col("phase")[i])).name.replace("_", " ").title()
+        self.time_label.setText(f"{t:8.2f} s   {ph}")
         self.readout.setText(
             f"alt {rec.col('altitude')[i]:.1f} m   speed {rec.col('speed')[i]:.1f} m/s   "
             f"Mach {rec.col('mach')[i]:.3f}   thrust {rec.col('thrust')[i]:.1f} N   mass {rec.col('mass')[i]:.3f} kg   "
             f"AoA {np.degrees(rec.col('aoa')[i]):.1f} deg   pitch {np.degrees(rec.col('pitch')[i]):.1f} deg   "
             f"static margin {rec.col('static_margin')[i]:.2f} cal"
         )
-        self.update_3d_dynamic(i)
-
-    def draw_3d_static(self) -> None:
-        rec = self.record
-        ax = self.ax3d
-        ax.clear()
-        if rec is None:
-            return
-        x, y, z = rec.col("pos_x"), rec.col("pos_y"), rec.col("pos_z")
-        ph = rec.col("phase").astype(int)
-        for p in np.unique(ph):
-            m = ph == p
-            ax.plot(
-                np.where(m, x, np.nan),
-                np.where(m, y, np.nan),
-                np.where(m, z, np.nan),
-                color=PHASE_COLORS[int(p)],
-                lw=1.6,
-                label=FlightPhase(int(p)).name.title(),
-            )
-        span = max(np.ptp(x), np.ptp(y), 1.0)
-        cx, cy = 0.5 * (x.max() + x.min()), 0.5 * (y.max() + y.min())
-        r = 0.6 * max(span, 0.3 * z.max())
-        gx, gy = np.meshgrid([cx - r, cx + r], [cy - r, cy + r])
-        ax.plot_surface(gx, gy, np.zeros_like(gx), alpha=0.15, color="#4a7a4a")
-        ax.set_xlim(cx - r, cx + r)
-        ax.set_ylim(cy - r, cy + r)
-        ax.set_zlim(0, max(z.max(), 1.0) * 1.05)
-        ax.set_xlabel("East [m]")
-        ax.set_ylabel("North [m]")
-        ax.set_zlabel("Up [m]")
-        ax.legend(fontsize=7, loc="upper left")
-        (self._rocket_line,) = ax.plot([], [], [], color="#ffffff", lw=3.0)
-        self._wind_arrow = None
-        self.canvas3d.draw_idle()
-
-    def update_3d_dynamic(self, i: int) -> None:
-        rec = self.record
-        if rec is None or self._rocket_line is None:
-            return
-        from ..physics.math3d import quat_rotate
-
-        q = (rec.col("quat_w")[i], rec.col("quat_x")[i], rec.col("quat_y")[i], rec.col("quat_z")[i])
-        nose = np.array(quat_rotate(q, (1.0, 0.0, 0.0)))
-        p = np.array([rec.col("pos_x")[i], rec.col("pos_y")[i], rec.col("pos_z")[i]])
-        scale = 0.06 * max(self.ax3d.get_zlim()[1], 10.0)
-        tail, head = p - nose * scale, p + nose * scale
-        self._rocket_line.set_data_3d([tail[0], head[0]], [tail[1], head[1]], [tail[2], head[2]])
-        if self._wind_arrow is not None:
-            self._wind_arrow.remove()
-        w = np.array([rec.col("wind_x")[i], rec.col("wind_y")[i], 0.0])
-        if np.linalg.norm(w) > 1e-6:
-            lim = self.ax3d.get_xlim()
-            origin = np.array([lim[0], self.ax3d.get_ylim()[0], 0.0])
-            self._wind_arrow = self.ax3d.quiver(
-                *origin, *(w / np.linalg.norm(w) * scale * 2), color="#56B4E9"
-            )
-        self.canvas3d.draw_idle()
 
     def open_dataset(self, path: str | None = None) -> None:
         d = path or QtWidgets.QFileDialog.getExistingDirectory(self, "Dataset directory", str(output_dir()))
