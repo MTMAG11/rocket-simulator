@@ -78,3 +78,17 @@ dynamics. A controller is any object with `reset(ctx)` and `update(ControlInput)
 * Invalid config raises `ConfigError` with the key path; a non-finite state raises `SimulationError`; bad runs in a batch are
   rejected and logged, never written to a dataset.
 * pandas is not a dependency (PyArrow only).
+
+## Repository layout
+
+```
+src/rocket_sim/      simulator package
+configs/             example vehicle, batch and dataset configs
+vehicles/            example vehicle file and its JSON schema
+data/motors/         .eng thrust curves (RASP format, from ThrustCurve.org)
+validation_data/     flight registry, real-flight definitions and telemetry, RocketPy cross-checks
+validation_results/  recorded validation outputs and the holdout log
+tests/  docs/  scripts/  packaging/
+```
+
+The EuRoC validation motors in `validation_data/raw/` are derived copies with the casing removed (documented in their headers).
