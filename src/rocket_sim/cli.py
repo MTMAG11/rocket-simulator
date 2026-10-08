@@ -365,10 +365,10 @@ def cmd_schema(a: argparse.Namespace) -> int:
 
 
 def cmd_motors(a: argparse.Namespace) -> int:
-    from .config.loader import PROJECT_ROOT
     from .motor import available_motors, load_motor
+    from .resources import motors_dir
 
-    for p in available_motors(Path(a.dir) if a.dir else PROJECT_ROOT / "data" / "motors"):
+    for p in available_motors(Path(a.dir) if a.dir else motors_dir()):
         m = load_motor(p)
         print(
             f"{p.name:34s} {m.designation:8s} class {m.impulse_class}  I={m.total_impulse:8.1f} Ns  "
@@ -378,10 +378,9 @@ def cmd_motors(a: argparse.Namespace) -> int:
 
 
 def cmd_gui(a: argparse.Namespace) -> int:
-    from .ui.main_window import main as gui_main
+    from .ui.launcher import launch_gui
 
-    gui_main()
-    return 0
+    return launch_gui()
 
 
 def build_parser() -> argparse.ArgumentParser:

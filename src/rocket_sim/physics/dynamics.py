@@ -143,7 +143,6 @@ class _BaseDynamics:
     def _evaluate(self, t: float, y: np.ndarray) -> Eval:  # pragma: no cover - abstract
         raise NotImplementedError
 
-    # -- helpers shared by 3/6-DOF ------------------------------------------------------------
     def chute_cda(self, t: float) -> float:
         total = 0.0
         for p, t0 in zip(self.vehicle.parachutes, self.chute_starts):

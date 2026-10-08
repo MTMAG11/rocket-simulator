@@ -37,9 +37,6 @@ FIDELITY_LEVELS = {
 }
 
 
-# ---------------------------------------------------------------------------------------------
-# sections
-# ---------------------------------------------------------------------------------------------
 @dataclass
 class SimulationSettings:
     dt_s: float = 0.01
@@ -500,9 +497,6 @@ class SimConfig:
                 )
 
 
-# ---------------------------------------------------------------------------------------------
-# validation helpers
-# ---------------------------------------------------------------------------------------------
 def _check(cond: bool, path: str, msg: str) -> None:
     if not cond:
         raise ConfigError(f"{path}: {msg}")
@@ -703,9 +697,6 @@ def _validate_env(e: EnvironmentCfg) -> None:
     )
 
 
-# ---------------------------------------------------------------------------------------------
-# generic dict -> dataclass parser with precise error paths
-# ---------------------------------------------------------------------------------------------
 def from_dict(cls: type, data: Any, path: str = "") -> Any:
     """Build dataclass ``cls`` from a mapping. Raises ConfigError with a dotted path."""
     if not isinstance(data, Mapping):

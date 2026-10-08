@@ -220,7 +220,7 @@ No ground rebound, tip-over or slide.
 
 ## Sensors, estimation, control
 
-See [sensors.md](sensors.md) for the audited list. Key honesty points: the estimator is a *linear* Kalman filter on
+See [sensors.md](sensors.md). The estimator is a *linear* Kalman filter on
 position/velocity with gyro-integrated attitude (TRIAD alignment on the pad with the configured reference magnetic field,
 pad gyro-bias estimation; no in-flight accelerometer/magnetometer attitude correction); it compensates known sensor
 latency; it is **not** an EKF (an EKF is a roadmap item; the `Estimator` interface is the extension point, and there is also

@@ -17,7 +17,6 @@ from rocket_sim.vehicle import BarrowmanAero, FinSet
 from rocket_sim.vehicle.assembly import Assembly, ControlSurfaceSet, Section
 from tests.conftest import cfg_from, free_launch, make_6dof, make_env, make_vehicle, tiny_motor
 
-# ---------------------------------------------------------------------------------------- TVC
 THRUST = 200.0
 
 
@@ -74,7 +73,6 @@ def test_maximum_gimbal_and_misalignment_add():
     )
 
 
-# ----------------------------------------------------------------------------------- actuator
 def act(**kw):
     cfg = dict(max_angle_deg=5.0, max_rate_deg_s=60.0, time_constant_s=0.0, delay_s=0.0)
     cfg.update(kw)
@@ -160,7 +158,6 @@ def test_physics_uses_actual_actuator_state_not_the_command():
     assert np.max(np.abs(r.col("omega_q")[post])) > 0.2  # torque appears once the actuator moved
 
 
-# ------------------------------------------------------------------------- control surfaces
 def canard_asm(angle0=0.0, count=4, x_le=0.8, span=0.06, chord=0.08, static=True):
     d = 0.05
     secs = [Section("nose", 0, 0.12, 0, d), Section("body", 0.12, 0.88, d, d)]

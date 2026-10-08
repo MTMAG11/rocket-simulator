@@ -40,6 +40,7 @@ from .config import read_mapping
 from .config.loader import PROJECT_ROOT
 from .data.batch import _base_dict, load_spec, read_manifest, run_batch, spec_hash
 from .errors import ConfigError
+from .resources import workspace_dir
 from .version import CONFIG_VERSION, DATASET_VERSION, PHYSICS_VERSION, SCHEMA_VERSION, SIM_VERSION
 
 
@@ -95,7 +96,7 @@ def run_experiment(
     h = spec_hash(spec, base_full)
     stamp = _dt.datetime.now(_dt.UTC).strftime("%Y%m%dT%H%M%SZ")
     exp_id = f"{d['name']}-{h[:8]}-{stamp}"
-    out = Path(root or PROJECT_ROOT / "experiments") / exp_id
+    out = Path(root or workspace_dir() / "experiments") / exp_id
     ds_dir = out / "dataset"
     ds_dir.mkdir(parents=True, exist_ok=True)
     spec.output_dir = str(ds_dir)
@@ -133,7 +134,7 @@ def run_experiment(
         },
     }
     (out / "experiment.json").write_text(json.dumps(record, indent=2), encoding="utf-8")
-    with (Path(root or PROJECT_ROOT / "experiments") / "index.jsonl").open("a", encoding="utf-8") as fh:
+    with (Path(root or workspace_dir() / "experiments") / "index.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(
             json.dumps(
                 {
@@ -173,7 +174,7 @@ def verify_experiment(exp_dir: str | Path, workers: int | None = 1) -> dict[str,
 
 
 def list_experiments(root: str | Path | None = None) -> list[dict[str, Any]]:
-    idx = Path(root or PROJECT_ROOT / "experiments") / "index.jsonl"
+    idx = Path(root or workspace_dir() / "experiments") / "index.jsonl"
     if not idx.exists():
         return []
     return [json.loads(line) for line in idx.read_text(encoding="utf-8").splitlines() if line.strip()]

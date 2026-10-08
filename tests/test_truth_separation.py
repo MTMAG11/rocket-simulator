@@ -46,7 +46,6 @@ class Spy(Controller):
         return Command()
 
 
-# ------------------------------------------------------------------------- the estimator sees measurements only
 def test_navigation_filter_is_never_given_truth_and_truth_estimator_is_explicit(monkeypatch):
     seen = []
     orig = NavigationFilter.update
@@ -121,7 +120,6 @@ def test_estimate_differs_from_truth_and_tracks_it():
     assert np.sqrt(np.mean(err**2)) < 5.0  # but a useful one
 
 
-# --------------------------------------------------------------------------- the controller sees the estimate
 def test_controller_input_equals_the_logged_estimate_not_the_truth():
     cfg = est_cfg(controller={"type": "none", "rate_hz": 50})
     spy = Spy()
@@ -194,7 +192,6 @@ def test_no_controller_means_state_source_none():
     )
 
 
-# --------------------------------------------------------------------------- sensors: truth vs measurement
 def perfect_sensors():
     z = {
         "noise_std": 0.0,
@@ -318,7 +315,6 @@ def test_sensor_realisations_are_seeded_and_independent_of_the_truth():
     assert np.array_equal(a.col("pos_z"), c.col("pos_z"))  # truth does not depend on the sensor seed
 
 
-# ------------------------------------------------------------------------------------ the schema says so
 def test_every_column_has_exactly_one_role_and_roles_partition_by_prefix():
     for c in COLUMNS:
         r = role_of(c)
@@ -416,7 +412,6 @@ def test_config_hash_includes_the_state_source_choice():
     assert config_from_dict is not None
 
 
-# ------------------------------------------------------------------------- round-2 review additions
 def test_controller_receives_estimated_attitude_rates_and_phase_not_the_truth():
     cfg = est_cfg(controller={"type": "none", "rate_hz": 50})
     spy = Spy()

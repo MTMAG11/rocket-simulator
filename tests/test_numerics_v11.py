@@ -29,7 +29,6 @@ def integrate(dyn, y, t_end, dt):
     return y
 
 
-# -------------------------------------------------------------------------------- quaternions
 def test_identity_quaternion_is_neutral():
     v = (0.3, -1.2, 2.5)
     assert quat_rotate((1.0, 0.0, 0.0, 0.0), v) == pytest.approx(v)
@@ -89,7 +88,6 @@ def test_euler_gimbal_lock_is_finite():
     assert all(math.isfinite(x) for x in quat_to_euler(q))
 
 
-# ---------------------------------------------------------------------------------- conservation
 def test_no_forces_means_constant_velocity_and_zero_rate():
     veh = make_vehicle(tiny_motor(), aero=ConstantAero(0.05, 0.0))
     dyn = make_6dof(veh, make_env(rho=1e-12, g=0.0), free_launch(z0=1e5))
@@ -158,7 +156,6 @@ def test_torque_only_constant_torque_gives_exact_angular_rate():
     assert y[11] == pytest.approx(torque / mp0.iyy * dt * n, rel=2e-2)  # q = M t / I (I changes by <1 %)
 
 
-# ----------------------------------------------------------------------------- convergence ladder
 LADDER_3DOF = (0.1, 0.05, 0.01, 0.005, 0.001)
 LADDER_6DOF = (0.05, 0.01, 0.005, 0.001)  # config validation caps 6-DOF dt at 0.05 s
 

@@ -14,9 +14,10 @@ from typing import Any
 import yaml
 
 from ..errors import ConfigError
+from ..resources import project_root
 from .schema import SimConfig, from_dict
 
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_ROOT = project_root()  # read-only defaults (data/, configs/, vehicles/); see rocket_sim.resources
 
 
 def read_mapping(path: str | Path) -> dict[str, Any]:

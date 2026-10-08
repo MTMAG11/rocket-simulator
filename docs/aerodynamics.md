@@ -94,7 +94,7 @@ judgements, not validated bounds, and a user-declared `experimental`/`cfd` kind 
 (and in the enhanced model at high Mach, where fin lift falls) the pitching moment can turn destabilising even with a positive static
 margin: the coefficient tests assert restoring moments only up to 10 degrees.
 
-## 6. Accuracy summary (honest)
+## 6. Accuracy summary
 
 | regime | status |
 |---|---|

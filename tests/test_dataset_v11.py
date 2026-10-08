@@ -33,7 +33,6 @@ def draw(params, corr, n=3000, seed=5):
     return {p.path: np.array([o[p.path] for o in out]) for p in params}
 
 
-# ---------------------------------------------------------------------------------- correlation
 def test_copula_preserves_marginals_and_imposes_correlation():
     params = [
         ParamSpec(path=MASS, dist="normal", rel_std=0.05),
@@ -135,7 +134,6 @@ def test_gps_dropout_probability_can_be_randomised_per_run():
     assert v.min() >= 0.0 and v.max() <= 0.4 and abs(v.mean() - 0.2) < 0.02
 
 
-# ------------------------------------------------------------------------------------- leakage
 def _rows(train, test, eps_shift=0.0, rng=None):
     rng = rng or np.random.default_rng(0)
     rows = []
@@ -242,7 +240,6 @@ def test_windows_never_span_two_flights(rec):
     assert w.t_end.min() >= lift and w.t_end.max() <= land
 
 
-# ------------------------------------------------------------------- batch: report, KS, traceability
 def _spec(tmp_path, runs=240, name="v11", corr=False):
     d = {
         "name": name,
@@ -324,7 +321,6 @@ def test_ks_check_flags_a_wrong_sampler():
     assert parameter_distribution_checks(bad, [p], base)[0]["flag"]
 
 
-# ---------------------------------------------------------------------------------- quality gates
 def test_quality_gate_rejects_each_failure_class(rec):
     assert check_record(rec, QualityLimits(require_landing=True)) == []
     cases = {
@@ -347,7 +343,6 @@ def test_quality_gate_rejects_each_failure_class(rec):
     assert any("no landing" in p for p in check_record(no_land))
 
 
-# --------------------------------------------------------------------------------- experiments
 def test_experiment_is_versioned_and_reproducible(tmp_path):
     from rocket_sim.experiments import list_experiments, run_experiment, verify_experiment
 

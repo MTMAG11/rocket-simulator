@@ -1,6 +1,6 @@
 """Physically-bounded calibration with leave-one-out cross-validation.
 
-Rules enforced here (spec section 36/37):
+Rules:
   * only parameters with a physical meaning and physical bounds may be fitted;
   * each parameter carries a written justification that is stored with the result;
   * a fit is only accepted if it improves the HELD-OUT flights (leave-one-out), otherwise the

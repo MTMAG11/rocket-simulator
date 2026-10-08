@@ -81,7 +81,6 @@ def build(d: dict, tmp_path: Path):
     return cfg, build_vehicle(cfg)
 
 
-# ----------------------------------------------------------------------------- mass summation / CG
 def test_total_mass_and_cg_equal_independent_summation(tmp_path):
     d = base_vehicle()
     cfg, veh = build(d, tmp_path)
@@ -159,7 +158,6 @@ def test_off_axis_components_give_cg_offset_and_products_of_inertia(tmp_path):
     assert t == pytest.approx(ref, rel=1e-10, abs=1e-14)
 
 
-# ------------------------------------------------------------------------- shape / shell / plate masses
 def test_shape_inertia_matches_closed_forms():
     m, lx, ly, lz = 0.2, 0.10, 0.05, 0.03
     ixx, iyy, izz = shape_inertia(m, "box", [lx, ly, lz], "c")
@@ -229,7 +227,6 @@ def test_cad_inertia_on_a_geometry_component_rides_on_a_mass_item(tmp_path):
     assert not any("tube" in n for n in veh.notes)
 
 
-# ------------------------------------------------------------------------------------ geometry placement
 def test_component_placement_and_dimensions_reach_the_assembly(tmp_path):
     cfg, veh = build(base_vehicle(), tmp_path)
     a = veh.assembly
@@ -292,7 +289,6 @@ def test_example_vehicle_derives_everything_and_is_internally_consistent(tmp_pat
     assert rep["aero_provenance"]["kind"] == "estimate"
 
 
-# ------------------------------------------------------------------------------------------ validation
 @pytest.mark.parametrize(
     "mutate,match",
     [
@@ -350,7 +346,6 @@ def test_bad_json_and_missing_file_messages(tmp_path):
         config_from_dict({"config_version": 1, "vehicle_file": "nope.json"}, base_dir=tmp_path)
 
 
-# --------------------------------------------------------------------------- determinism / traceability
 def test_compilation_is_deterministic_and_line_ending_insensitive(tmp_path):
     p = tmp_path / "v.json"
     text = json.dumps(base_vehicle(), indent=2)
@@ -433,7 +428,6 @@ def test_vehicle_cli_prints_the_derived_report(capsys):
     assert rep["liftoff_mass_kg"] > rep["dry_mass_kg"]
 
 
-# ---------------------------------------------------------------------------------------- JSON schema file
 def test_published_json_schema_matches_the_compiler_tables():
     """vehicles/vehicle.schema.json is generated from the compiler's tables; they must not drift."""
     from rocket_sim.vehicle import vehicle_file as vf
@@ -458,7 +452,6 @@ def test_example_validates_against_the_json_schema_when_jsonschema_is_available(
         jsonschema.validate(bad, schema)
 
 
-# ------------------------------------------------------------------------- round-1 review additions
 def test_non_positive_semidefinite_tensor_is_rejected():
     d = base_vehicle()
     d["components"][3]["inertia_kgm2"] = [
@@ -527,7 +520,6 @@ def test_demo_vehicle_report_table_equals_the_physics_cg():
             assert rows[c.name].x_cg_m == pytest.approx(c.x_cg, rel=1e-12), c.name
 
 
-# --------------------------------------------------------------- round-2 review: literal (non-shared) tensor reference
 LITERAL_CG = (
     0.5333333333,
     0.0266666667,
@@ -590,7 +582,6 @@ def test_vehicle_json_tensor_sign_convention_reaches_the_physics_with_the_litera
     assert np.array(mm.at(0.0).tensor()) == pytest.approx(np.array(LITERAL_TENSOR), abs=1e-9)
 
 
-# --------------------------------------------------------------------------- round-3 review additions
 @pytest.mark.parametrize(
     "key,val",
     [

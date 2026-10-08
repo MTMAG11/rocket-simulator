@@ -112,7 +112,6 @@ def compare_flight(real: Telemetry, rec: FlightRecord, definition: dict[str, Any
     metrics: dict[str, Any] = {
         "alignment": {"channel": ach, "threshold": thr, "t_real": tr, "t_sim": ts, "shift_s": shift}
     }
-    # --- apogee, landing -------------------------------------------------------------------
     i_r = int(np.argmax(ra.y))
     i_s = int(np.argmax(sa.y))
     metrics["apogee"] = scalar_error(float(ra.y[i_r]), float(sa.y[i_s]))
@@ -129,7 +128,6 @@ def compare_flight(real: Telemetry, rec: FlightRecord, definition: dict[str, Any
     else:
         notes.append("real record ends before landing: landing time not compared")
 
-    # --- altitude series -------------------------------------------------------------------
     t_end = min(ra.t[-1], t_sim[-1])
     m_all = (ra.t >= tr - 1.0) & (ra.t <= t_end)
     sim_on_r = _interp(t_sim, sa.y, ra.t)
@@ -141,7 +139,6 @@ def compare_flight(real: Telemetry, rec: FlightRecord, definition: dict[str, Any
     if m_des.sum() > 3:
         metrics["altitude_descent"] = series_error(ra.y[m_des], sim_on_r[m_des]).to_dict()
 
-    # --- alignment diagnostic: how far is the (untuned) threshold alignment from the RMSE-optimal shift? ---------
     if m_asc.sum() > 8:
         scan = np.linspace(-1.5, 1.5, 121)
         rm = np.array(
@@ -163,7 +160,6 @@ def compare_flight(real: Telemetry, rec: FlightRecord, definition: dict[str, Any
             f"shift of {scan[ib]:+.3f} s (the applied alignment is NOT tuned to the RMSE)"
         )
 
-    # --- velocity -----------------------------------------------------------------------------
     vname = "velocity_z" if real.has("velocity_z") else ("speed" if real.has("speed") else None)
     if vname is not None:
         rv = real[vname]
@@ -184,7 +180,6 @@ def compare_flight(real: Telemetry, rec: FlightRecord, definition: dict[str, Any
         metrics["velocity"] = series_error(ry[ok], sv[ok]).to_dict()
         metrics["max_velocity"] = scalar_error(float(np.max(ry[ok])), sim_vmax)
 
-    # --- axial acceleration -------------------------------------------------------------------
     if real.has("accel_axial"):
         rac = real["accel_axial"]
         dt = float(np.median(np.diff(rac.t)))

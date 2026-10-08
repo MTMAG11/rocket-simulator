@@ -23,7 +23,6 @@ from rocket_sim.simulation import run_simulation
 from tests.conftest import cfg_from
 
 
-# ------------------------------------------------------------------------------- sensors
 def channel(**kw):
     cfg = SensorCfg(enabled=True, rate_hz=kw.pop("rate_hz", 100.0), **kw)
     return SensorChannel(cfg, 1, np.random.default_rng(3))
@@ -112,7 +111,6 @@ def test_sensor_runs_are_reproducible_and_seed_dependent():
     )  # truth unaffected by the sensor seed (no wind noise)
 
 
-# ----------------------------------------------------------------------------- estimation
 def test_triad_recovers_attitude_from_up_and_field_vectors():
     rng = np.random.default_rng(1)
     for _ in range(20):
@@ -190,7 +188,6 @@ def test_estimator_not_valid_before_alignment():
         cfg_from(fidelity=5, estimator={"type": "nav_kf", "alignment_time_s": 3.0})
 
 
-# ----------------------------------------------------------------------------- actuators
 def test_actuator_limits_lag_rate_and_delay():
     act = TVCActuator(ActuatorCfg(max_angle_deg=5.0, max_rate_deg_s=60.0, time_constant_s=0.05, delay_s=0.1))
     act.command(0.0, Command(math.radians(20.0), 0.0))  # exceeds the limit
@@ -222,7 +219,6 @@ def test_first_order_lag_time_constant():
     assert act.state[0] == pytest.approx(0.1 * (1 - math.exp(-1.0)), rel=1e-6)  # exact exponential at t = tau
 
 
-# ----------------------------------------------------------------------------- controllers
 def test_controller_interface_and_factory():
     assert build_controller("none", {}).update(None).tvc_y == 0.0  # type: ignore[arg-type]
     sc = ScheduleController([[0, 0, 0], [1, 2, -2]])

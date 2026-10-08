@@ -1,4 +1,4 @@
-"""Component-based airframe geometry (V1.1): sections, control surfaces and the ``Assembly``.
+"""Component-based airframe geometry: sections, control surfaces and the ``Assembly``.
 
 The rocket is a stack of axisymmetric sections (nose, body tubes, transitions / boat-tails) plus a fin set
 and optional movable control-surface sets. Positions are measured AFT from the nose tip [m].

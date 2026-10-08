@@ -31,7 +31,6 @@ def vehicle(**aero):
     return build_vehicle(cfg_from(fidelity=3, rocket={"aero": aero}))
 
 
-# ------------------------------------------------------------------------------------------- provenance
 @pytest.mark.parametrize(
     "aero,kind",
     [
@@ -149,7 +148,6 @@ def test_provenance_reaches_the_flight_record_and_the_dataset_rows(tmp_path):
     assert read_record_parquet(f).meta.aero_provenance["kind"] == "estimate"
 
 
-# ---------------------------------------------------------------------- interface: coefficients, bounds, trends
 MODELS = [
     {"model": "barrowman"},
     {"model": "enhanced"},
@@ -221,7 +219,6 @@ def test_demo_vehicle_regression_pin():
     )
 
 
-# --------------------------------------------------------------------------------------------- cross-check
 def test_vehicle_file_stability_matches_rocketpy_on_the_same_geometry():
     """Independent code: RocketPy builds the SAME nose / fins / boat-tail from the vehicle file's numbers (CNa and CP)."""
     try:
@@ -269,7 +266,6 @@ def test_vehicle_file_stability_matches_rocketpy_on_the_same_geometry():
     )  # CP within 0.06 cal (von Karman vs ogive nose CP is the known difference)
 
 
-# ---------------------------------------------------------------------- stated ranges are enforced at run time
 def test_flight_beyond_the_stated_mach_range_is_warned_about():
     cfg = config_from_dict(
         {"config_version": 1, "fidelity": 3, "vehicle_file": str(DEMO), "simulation": {"t_max_s": 30}},

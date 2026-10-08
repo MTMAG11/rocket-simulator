@@ -14,7 +14,7 @@ GPS additionally has ``startup_delay_s`` (no fix before this time), ``dropout_pr
 independently with this probability: Bernoulli) and separate position / velocity noise
 (``noise_std`` / ``velocity_noise_std``; default velocity noise 0.05 x position noise).
 
-Sensors (see docs/sensors.md for the audited list of what is and is not modelled):
+Sensors (see docs/sensors.md for what is and is not modelled):
   accelerometer  specific force, body axes          gyroscope   angular rate, body axes
   barometer      STATIC PRESSURE [Pa] (the altitude conversion lives in the consumer, see estimation)
   GPS            position + velocity, launch frame  magnetometer  Earth field in body axes

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rocket-simulator"
-version = "0.2.0"
+dynamic = ["version"]  # single source: rocket_sim.version.SIM_VERSION
 description = "Physics-based rocket flight simulator and dataset generator for autonomous-rocket GNC development"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -14,14 +14,19 @@ dependencies = [
     "pyarrow>=14",
     "matplotlib>=3.8",
     "scipy>=1.11",
+    "PySide6>=6.6",  # the GUI is the primary front end: a plain `pip install -e .` must be enough to launch it
 ]
 
 [project.optional-dependencies]
-gui = ["PySide6>=6.6"]
+gui = []  # kept so older instructions (`pip install -e ".[gui]"`) still work; PySide6 is now a core dependency
+build = ["pyinstaller>=6.6"]
 dev = ["pytest>=8", "ruff", "mypy", "psutil"]
 
 [project.scripts]
 rocketsim = "rocket_sim.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "rocket_sim.version.SIM_VERSION"}
 
 [tool.setuptools.packages.find]
 where = ["src"]

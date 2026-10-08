@@ -95,7 +95,6 @@ def load_registry(path: str | Path) -> Registry:
     return Registry(p, flights, d.get("excluded", []), str(d.get("frozen_physics_version", "")))
 
 
-# ------------------------------------------------------------------------------------------ holdout log
 def read_log(log_path: Path) -> list[dict[str, Any]]:
     if not log_path.exists():
         return []
@@ -133,7 +132,7 @@ def input_fingerprints(entry: FlightEntry) -> dict[str, str]:
 
 def append_log(log_path: Path, entry: dict[str, Any]) -> None:
     """Append an entry carrying ``prev`` = SHA-256 of the previous log line (a hash chain: editing or deleting an earlier
-    line breaks every later link, which ``verify_log`` reports). Entries written before V1.1 hardening have no ``prev``."""
+    line breaks every later link, which ``verify_log`` reports). Older entries have no ``prev``."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
     lines = (
         [x for x in log_path.read_text(encoding="utf-8").splitlines() if x.strip()]

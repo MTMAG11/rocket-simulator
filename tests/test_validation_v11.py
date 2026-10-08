@@ -19,7 +19,6 @@ from rocket_sim.validation.input_mc import INPUT_PRIORS, sample_overrides
 VD = Path(__file__).resolve().parents[1] / "validation_data"
 
 
-# ---------------------------------------------------------------------------------- fingerprint
 def test_fingerprint_ignores_formatting_and_comments_but_not_code(tmp_path):
     root = tmp_path / "pkg"
     (root / "physics").mkdir(parents=True)
@@ -41,7 +40,6 @@ def test_fingerprint_of_the_real_package_is_stable_and_nonempty():
     assert a == b and len(a) == 64
 
 
-# ---------------------------------------------------------------------------- real registry file
 def test_real_registry_is_consistent_and_split_is_as_preregistered():
     reg = R.load_registry(VD / "registry.yaml")
     ids = [f.id for f in reg.flights]
@@ -110,7 +108,6 @@ def test_logged_holdout_results_match_the_documented_numbers():
         assert len(e["physics_fingerprint"]) == 64 and e["physics_version"] in ("1.2.0", "1.2.1")
 
 
-# --------------------------------------------------------------------------- holdout mechanics
 @pytest.fixture
 def toy_registry(tmp_path):
     """A registry whose 'holdout' flight is actually the cheap development flight bella_lui."""
@@ -205,14 +202,12 @@ def test_registry_rejects_bad_files(tmp_path):
         R.load_registry(p)
 
 
-# ------------------------------------------------------------------------- calibration flights
 @pytest.mark.parametrize("name,expected", [("genesis", -2.54), ("astra", -0.93)])
 def test_calibration_flight_regression(name, expected):
     r = run_validation(VD / f"{name}.yaml", plot=False)
     assert r.metrics["apogee"]["pct_error"] == pytest.approx(expected, abs=0.05)
 
 
-# --------------------------------------------------------------------------- input uncertainty
 def test_input_uncertainty_sampler_matches_declared_priors():
     nom = {"temp": 8.0, "elev": 84.0, "mass": 6.0, "thrust": 1.0}
     rng = np.random.default_rng(0)
@@ -252,7 +247,6 @@ def test_recorded_input_mc_results_are_consistent():
         assert r["inside_90"] == (r["p05_m"] <= r["real_apogee_m"] <= r["p95_m"])
 
 
-# --------------------------------------------------------------------- protocol hardening (critic 1)
 def test_log_hash_chain_detects_tampering(tmp_path):
     log = tmp_path / "l.jsonl"
     for i in range(3):

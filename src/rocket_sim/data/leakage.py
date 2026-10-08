@@ -1,4 +1,4 @@
-"""Train/test leakage checks and dataset statistics (V1.1).
+"""Train/test leakage checks and dataset statistics.
 
 Leakage that matters for ML on simulated flights:
 
@@ -24,7 +24,6 @@ from ..simulation.record import FlightRecord
 from .spec import DatasetSection
 
 
-# ------------------------------------------------------------------------------------------ parameters
 def _param_matrix(rows: list[dict[str, Any]]) -> tuple[list[str], np.ndarray, list[str]]:
     """Numeric parameter matrix (accepted runs only) over parameters that actually vary."""
     keys = sorted({k for r in rows for k in r if k.startswith("param.")})
@@ -102,7 +101,6 @@ def check_run_disjoint(rows: list[dict[str, Any]]) -> dict[str, int]:
     }
 
 
-# ------------------------------------------------------------------------------------------ temporal
 def temporal_causality_check(rec: FlightRecord, section: DatasetSection, n_cuts: int = 24) -> dict[str, Any]:
     """Verify input features are causal. For several cut times, everything recorded after the cut is replaced by garbage
     and the resampled INPUT table is rebuilt: every row whose time is strictly before the cut must be IDENTICAL. (Windows
@@ -142,7 +140,6 @@ def temporal_causality_check(rec: FlightRecord, section: DatasetSection, n_cuts:
     }
 
 
-# ------------------------------------------------------------------------------------------ statistics
 def _stats(v: np.ndarray) -> dict[str, float]:
     return {
         "mean": float(v.mean()),

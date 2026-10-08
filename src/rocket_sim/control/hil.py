@@ -1,23 +1,12 @@
-"""DEPRECATED (V1): use ``rocket_sim.hil`` (protocol v2: every timestamped sample, handshake, timing, record/replay).
-Kept so existing code and tests keep working; it sends only the LATEST sample of each sensor.
+"""Deprecated: use ``rocket_sim.hil`` (protocol v2). This V1 bridge sends only the latest sample of each sensor.
 
-Hardware-in-the-loop (HIL) bridge: a controller that lives on the other side of a byte transport.
-
-The simulator stays authoritative for physics; a *real flight computer* (or any external process) receives the
-SIMULATED SENSOR readings, runs its own estimator/controller, and replies with actuator commands:
-
-    SIMULATION -> sensors -> [ transport ] -> REAL FLIGHT COMPUTER -> [ transport ] -> command -> actuator -> SIMULATION
-
-Wire protocol (newline-delimited JSON, one request/response per control tick):
+One request/response per control tick, newline-delimited JSON:
 
     request : {"t": s, "phase": int, "accel": [3], "gyro": [3], "baro_pa": x, "gps": [6], "mag": [3],
                "new": {"accel": bool, "gyro": bool, "baro": bool, "gps": bool, "mag": bool}}
     response: {"tvc_y": rad, "tvc_z": rad}
 
-``transport`` is any object with ``send(bytes)`` and ``recv() -> bytes`` (a serial port, socket or pipe wrapper).
-This module implements the *plumbing* and a deterministic lock-step schedule (the simulation waits for the reply).
-Real-time pacing, latency injection beyond the actuator ``delay_s`` and timeout handling are NOT implemented: for
-non-real-time (lock-step) HIL this is sufficient and exactly reproducible; real-time HIL would add a pacing layer.
+``transport`` is any object with ``send(bytes)`` and ``recv() -> bytes``. Lock-step only: no real-time pacing or timeouts.
 """
 
 from __future__ import annotations

@@ -17,22 +17,29 @@ import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 from matplotlib.figure import Figure
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import Qt
 
 from ..config import apply_overrides, config_from_dict, config_to_dict, load_config
-from ..config.loader import PROJECT_ROOT
 from ..data.export import export_record
 from ..data.schema import column, columns_for
 from ..errors import RocketSimError
-from ..motor import available_motors
 from ..plotting import COLORS, EVENT_STYLE
 from ..reporting import summary_text
+from ..resources import (
+    APP_NAME,
+    app_version,
+    configs_dir,
+    default_config,
+    launch_description,
+    output_dir,
+    resource_root,
+)
 from ..simulation import FlightPhase, Simulation
 from ..simulation.record import FlightRecord
+from .catalog import VehicleEntry, list_motors, list_vehicles, save_run_results
 from .styles import MAIN_STYLE
 
-DEFAULT_CONFIG = PROJECT_ROOT / "configs" / "example_g80.yaml"
 DEFAULT_PLOTS = ["altitude", "speed", "thrust"]
 PHASE_COLORS = {
     0: "#999999",
@@ -68,70 +75,104 @@ class SimWorker(QtCore.QObject):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.setWindowTitle("Rocket Simulator")
+        self.setWindowTitle(f"{APP_NAME}  v{app_version()}")
         self.resize(1500, 920)
         self.record: FlightRecord | None = None
-        self.base_path = DEFAULT_CONFIG
-        self.base_dict: dict[str, Any] = config_to_dict(load_config(DEFAULT_CONFIG))
-        self.base_dir = DEFAULT_CONFIG.parent
+        self.results_dir: Path | None = None
+        self.base_path = default_config()
+        self.base_dict: dict[str, Any] = {}
+        self.base_dir = self.base_path.parent
         self._thread: QtCore.QThread | None = None
         self._worker: SimWorker | None = None
         self._build_ui()
-        self._load_controls_from_dict()
+        self._select_default_vehicle()
 
-    # ---------------------------------------------------------------------------- UI building
     def _build_ui(self) -> None:
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
         root = QtWidgets.QHBoxLayout(central)
 
-        # ---- left: controls
         left = QtWidgets.QWidget()
-        left.setMaximumWidth(340)
+        left.setMaximumWidth(360)
         lv = QtWidgets.QVBoxLayout(left)
 
-        btns = QtWidgets.QHBoxLayout()
-        self.run_button = QtWidgets.QPushButton("Run simulation")
-        self.run_button.clicked.connect(self.run_simulation)
-        self.open_button = QtWidgets.QPushButton("Open config…")
+        g = QtWidgets.QGroupBox("1  Vehicle")
+        gl = QtWidgets.QVBoxLayout(g)
+        self.vehicle_box = QtWidgets.QComboBox()
+        for v in list_vehicles():
+            self.vehicle_box.addItem(v.label, v)
+        self.vehicle_box.currentIndexChanged.connect(self._on_vehicle_chosen)
+        self.open_button = QtWidgets.QPushButton("Browse…")
         self.open_button.clicked.connect(self.open_config)
-        btns.addWidget(self.run_button)
-        btns.addWidget(self.open_button)
-        lv.addLayout(btns)
-        self.config_label = QtWidgets.QLabel()
-        self.config_label.setWordWrap(True)
-        lv.addWidget(self.config_label)
-
-        g = QtWidgets.QGroupBox("Vehicle and motor")
-        f = QtWidgets.QFormLayout(g)
-        self.motor_box = QtWidgets.QComboBox()
-        for p in available_motors(PROJECT_ROOT / "data" / "motors"):
-            self.motor_box.addItem(p.stem, str(p.relative_to(PROJECT_ROOT)).replace("\\", "/"))
-        self.dry_mass = self._spin(0.001, 500.0, 3, " kg", 0.01)
-        self.thrust_scale = self._spin(0.5, 1.5, 3, "", 0.01)
-        f.addRow("Motor:", self.motor_box)
-        f.addRow("Dry mass:", self.dry_mass)
-        f.addRow("Thrust scale:", self.thrust_scale)
+        self.vehicle_info = QtWidgets.QLabel()
+        self.vehicle_info.setWordWrap(True)
+        gl.addWidget(self.vehicle_box)
+        gl.addWidget(self.vehicle_info)
+        gl.addWidget(self.open_button)
         lv.addWidget(g)
 
-        g = QtWidgets.QGroupBox("Launch and environment")
+        g = QtWidgets.QGroupBox("2  Motor")
+        gl = QtWidgets.QVBoxLayout(g)
+        self.motor_box = QtWidgets.QComboBox()
+        self.motor_info: dict[str, str] = {}
+        for m in list_motors():
+            self.motor_box.addItem(m.label, m.key)
+            self.motor_info[m.key] = m.summary
+        self.motor_box.currentIndexChanged.connect(self._on_motor_chosen)
+        self.motor_label = QtWidgets.QLabel()
+        self.motor_label.setWordWrap(True)
+        gl.addWidget(self.motor_box)
+        gl.addWidget(self.motor_label)
+        lv.addWidget(g)
+
+        g = QtWidgets.QGroupBox("3  Conditions")
         f = QtWidgets.QFormLayout(g)
         self.elevation = self._spin(5.0, 90.0, 1, " deg", 1.0)
-        self.azimuth = self._spin(0.0, 360.0, 1, " deg", 5.0)
         self.wind_speed = self._spin(0.0, 40.0, 1, " m/s", 0.5)
         self.wind_dir = self._spin(0.0, 360.0, 0, " deg (from)", 10.0)
-        self.temp_offset = self._spin(-40.0, 40.0, 1, " K", 1.0)
-        self.site_elev = self._spin(-400.0, 5000.0, 0, " m", 50.0)
-        f.addRow("Elevation:", self.elevation)
-        f.addRow("Azimuth:", self.azimuth)
+        f.addRow("Launch elevation:", self.elevation)
         f.addRow("Wind speed:", self.wind_speed)
         f.addRow("Wind from:", self.wind_dir)
-        f.addRow("Temp. offset (ISA):", self.temp_offset)
-        f.addRow("Site elevation MSL:", self.site_elev)
         lv.addWidget(g)
 
-        g = QtWidgets.QGroupBox("Simulation")
-        f = QtWidgets.QFormLayout(g)
+        self.run_button = QtWidgets.QPushButton("4  Run simulation")
+        self.run_button.setObjectName("run_button")
+        self.run_button.setMinimumHeight(44)
+        self.run_button.clicked.connect(self.run_simulation)
+        lv.addWidget(self.run_button)
+
+        g = QtWidgets.QGroupBox("5  Results")
+        gl = QtWidgets.QVBoxLayout(g)
+        self.results_label = QtWidgets.QPlainTextEdit()  # selectable, wraps long paths anywhere
+        self.results_label.setReadOnly(True)
+        self.results_label.setWordWrapMode(QtGui.QTextOption.WrapMode.WrapAnywhere)
+        self.results_label.setMaximumHeight(96)
+        self.results_label.setPlainText(
+            "No run yet. Each run is saved in a new folder under:\n" + str(output_dir() / "gui_runs")
+        )
+        self.folder_button = QtWidgets.QPushButton("Open results folder")
+        self.folder_button.clicked.connect(self.open_results_folder)
+        self.export_button = QtWidgets.QPushButton("Export telemetry…")
+        self.export_button.clicked.connect(self.export_record)
+        self.export_button.setEnabled(False)
+        gl.addWidget(self.results_label)
+        gl.addWidget(self.folder_button)
+        gl.addWidget(self.export_button)
+        lv.addWidget(g)
+
+        # advanced: everything else, collapsed by default
+        self.adv_box = QtWidgets.QGroupBox("Advanced settings")
+        self.adv_box.setCheckable(True)
+        self.adv_box.setChecked(False)
+        av = QtWidgets.QVBoxLayout(self.adv_box)
+        self.adv_inner = QtWidgets.QWidget()
+        f = QtWidgets.QFormLayout(self.adv_inner)
+        f.setContentsMargins(0, 0, 0, 0)
+        self.dry_mass = self._spin(0.001, 500.0, 3, " kg", 0.01)
+        self.thrust_scale = self._spin(0.5, 1.5, 3, "", 0.01)
+        self.azimuth = self._spin(0.0, 360.0, 1, " deg", 5.0)
+        self.temp_offset = self._spin(-40.0, 40.0, 1, " K", 1.0)
+        self.site_elev = self._spin(-400.0, 5000.0, 0, " m", 50.0)
         self.fidelity = QtWidgets.QComboBox()
         for i, name in (
             (0, "0  1-D vacuum"),
@@ -148,21 +189,25 @@ class MainWindow(QtWidgets.QMainWindow):
         self.integrator.addItems(["rk4", "midpoint", "euler"])
         self.seed = QtWidgets.QSpinBox()
         self.seed.setRange(0, 2**30)
+        f.addRow("Dry mass:", self.dry_mass)
+        f.addRow("Thrust scale:", self.thrust_scale)
+        f.addRow("Azimuth:", self.azimuth)
+        f.addRow("Temp. offset (ISA):", self.temp_offset)
+        f.addRow("Site elevation MSL:", self.site_elev)
         f.addRow("Fidelity:", self.fidelity)
         f.addRow("Timestep:", self.dt)
         f.addRow("Integrator:", self.integrator)
         f.addRow("Seed:", self.seed)
-        lv.addWidget(g)
-        self.export_button = QtWidgets.QPushButton("Export telemetry…")
-        self.export_button.clicked.connect(self.export_record)
-        self.export_button.setEnabled(False)
-        lv.addWidget(self.export_button)
+        av.addWidget(self.adv_inner)
+        self.adv_inner.setVisible(False)
+        self.adv_box.toggled.connect(self.adv_inner.setVisible)
+        lv.addWidget(self.adv_box)
         lv.addStretch()
         root.addWidget(left)
 
-        # ---- right: tabs
         right = QtWidgets.QVBoxLayout()
         self.tabs = QtWidgets.QTabWidget()
+        self.tabs.addTab(self._build_start_tab(), "Getting started")
         self.tabs.addTab(self._build_graph_tab(), "Graphs")
         self.tabs.addTab(self._build_3d_tab(), "3D view")
         self.summary_text = QtWidgets.QPlainTextEdit()
@@ -189,6 +234,7 @@ class MainWindow(QtWidgets.QMainWindow):
         right.addWidget(self.events_label)
         root.addLayout(right, 1)
         self.statusBar().showMessage("Ready")
+        self.statusBar().addPermanentWidget(QtWidgets.QLabel(f"{APP_NAME} v{app_version()}"))
 
     def _spin(self, lo: float, hi: float, dec: int, suffix: str, step: float) -> QtWidgets.QDoubleSpinBox:
         s = QtWidgets.QDoubleSpinBox()
@@ -197,6 +243,70 @@ class MainWindow(QtWidgets.QMainWindow):
         s.setSuffix(suffix)
         s.setSingleStep(step)
         return s
+
+    def _build_start_tab(self) -> QtWidgets.QWidget:
+        self.start_page = QtWidgets.QTextBrowser()
+        self.start_page.setOpenExternalLinks(False)
+        self._refresh_start_page()
+        return self.start_page
+
+    def _refresh_start_page(self, last_run: str = "") -> None:
+        last = f"<h3>Last run</h3><pre>{last_run}</pre>" if last_run else ""
+        self.start_page.setHtml(
+            f"""
+            <h1>{APP_NAME}</h1>
+            <p>Version {app_version()} ({launch_description()})</p>
+            <ol>
+              <li>Vehicle: choose a bundled vehicle or browse for a config / <code>vehicle.json</code>.</li>
+              <li>Motor: the vehicle's own motor is preselected.</li>
+              <li>Conditions: launch elevation and wind. Other settings are under Advanced.</li>
+              <li>Run simulation.</li>
+            </ol>
+            <p>Data: <code>{resource_root()}</code><br>
+               Results: <code>{output_dir() / "gui_runs"}</code></p>
+            <p>The bundled vehicles are placeholders, not measured rockets. The model is not validated for small model
+               rockets, supersonic flight or sensors on real data.</p>
+            {last}
+            """
+        )
+
+    def _select_default_vehicle(self) -> None:
+        """Start on the default example config (so a first run needs no choices), else on the first vehicle."""
+        want = default_config().name
+        for i in range(self.vehicle_box.count()):
+            if self.vehicle_box.itemData(i).path.name == want:
+                self.vehicle_box.setCurrentIndex(i)
+                break
+        self._on_vehicle_chosen(self.vehicle_box.currentIndex())
+
+    def _load_vehicle(self, path: Path) -> None:
+        """Load a simulation config or a vehicle file into the controls; invalid files leave the old selection."""
+        try:
+            if path.suffix.lower() == ".json":
+                cfg = config_from_dict(
+                    {"config_version": 1, "fidelity": 3, "vehicle_file": path.name}, base_dir=path.parent
+                )
+            else:
+                cfg = load_config(path)
+        except (RocketSimError, OSError, ValueError) as exc:
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Could not load vehicle",
+                f"Could not load:\n{path}\n\n{exc}\n\nThe previous vehicle is still selected.",
+            )
+            return
+        self.base_path, self.base_dir = path, path.parent
+        self.base_dict = config_to_dict(cfg)
+        self._load_controls_from_dict()
+
+    def _on_vehicle_chosen(self, index: int) -> None:
+        entry = self.vehicle_box.itemData(index)
+        if isinstance(entry, VehicleEntry):
+            self.vehicle_info.setText(entry.description)
+            self._load_vehicle(entry.path)
+
+    def _on_motor_chosen(self, _index: int = 0) -> None:
+        self.motor_label.setText(self.motor_info.get(self.motor_box.currentData(), "custom motor file"))
 
     def _build_graph_tab(self) -> QtWidgets.QWidget:
         w = QtWidgets.QWidget()
@@ -255,15 +365,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dataset_dir: Path | None = None
         return w
 
-    # ------------------------------------------------------------------------- config <-> UI
     def _load_controls_from_dict(self) -> None:
         d = self.base_dict
-        self.config_label.setText(f"Config: {self.base_path.name}  ({d['name']})")
-        idx = self.motor_box.findData(d["motor"]["file"].replace("\\", "/"))
-        if idx < 0:
-            self.motor_box.addItem(Path(d["motor"]["file"]).stem, d["motor"]["file"])
+        self.statusBar().showMessage(f"Vehicle loaded: {d['name']} ({self.base_path.name})")
+        file = d["motor"]["file"].replace("\\", "/")
+        idx = self.motor_box.findData(file)
+        if idx < 0:  # the vehicle's own motor file lies outside the bundled list: keep it selectable
+            self.motor_box.addItem(Path(file).stem + " (from vehicle)", file)
             idx = self.motor_box.count() - 1
         self.motor_box.setCurrentIndex(idx)
+        self._on_motor_chosen()
         dm = d["rocket"].get("dry_mass_kg")
         # component-based airframes carry their mass in the sections / mass items: nothing to edit here
         self.dry_mass.setEnabled(dm is not None)
@@ -328,28 +439,34 @@ class MainWindow(QtWidgets.QMainWindow):
             ov["environment.wind.model"] = "none"
         return apply_overrides(d, ov)
 
-    # -------------------------------------------------------------------------------- actions
     def open_config(self) -> None:
         p, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open configuration", str(PROJECT_ROOT / "configs"), "Config (*.yaml *.yml *.json *.toml)"
+            self,
+            "Open configuration or vehicle file",
+            str(configs_dir()),
+            "Config or vehicle (*.yaml *.yml *.json *.toml)",
         )
         if not p:
             return
-        try:
-            cfg = load_config(p)
-        except RocketSimError as exc:
-            QtWidgets.QMessageBox.critical(self, "Invalid configuration", str(exc))
-            return
-        self.base_path, self.base_dir = Path(p), Path(p).parent
-        self.base_dict = config_to_dict(cfg)
-        self._load_controls_from_dict()
+        path = Path(p)
+        entry = VehicleEntry(f"{path.stem}  [{path.name}]", path, f"Loaded from {path}")
+        self.vehicle_box.blockSignals(True)
+        self.vehicle_box.addItem(entry.label, entry)
+        self.vehicle_box.setCurrentIndex(self.vehicle_box.count() - 1)
+        self.vehicle_box.blockSignals(False)
+        self._on_vehicle_chosen(self.vehicle_box.currentIndex())
 
     def run_simulation(self, blocking: bool = False) -> None:
         if self._thread is not None and self._thread.isRunning():
             return
         self.run_button.setEnabled(False)
         self.statusBar().showMessage("Simulating…")
-        self._worker = SimWorker(self.current_dict(), self.base_dir, self.seed.value())
+        try:
+            cfg_dict = self.current_dict()
+        except RocketSimError as exc:
+            self._on_failed(str(exc))
+            return
+        self._worker = SimWorker(cfg_dict, self.base_dir, self.seed.value())
         self._worker.finished.connect(self._on_finished)
         self._worker.failed.connect(self._on_failed)
         if blocking:
@@ -370,6 +487,15 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_finished(self, rec: FlightRecord) -> None:
         self.run_button.setEnabled(True)
         self.set_record(rec)
+        saved = ""
+        try:
+            self.results_dir = save_run_results(rec, str(self.base_dict.get("name", "run")))
+            saved = f"Saved to:\n{self.results_dir}"
+        except OSError as exc:
+            saved = f"Results could not be saved ({exc}).\nUse Export telemetry to choose another folder."
+        self.results_label.setPlainText(saved)
+        self._refresh_start_page(self.summary_text.toPlainText())
+        self.tabs.setCurrentIndex(self.tabs.indexOf(self.summary_text))
         self.statusBar().showMessage(
             f"Done: {rec.meta.n_steps} steps in {rec.meta.wall_time_s:.2f} s, status {rec.meta.status}"
         )
@@ -393,15 +519,23 @@ class MainWindow(QtWidgets.QMainWindow):
         self.draw_3d_static()
         self._on_scrub(0)
 
+    def open_results_folder(self) -> None:
+        """Open the last run's folder (or the folder where runs will be saved) in the file manager."""
+        from PySide6.QtCore import QUrl
+        from PySide6.QtGui import QDesktopServices
+
+        target = self.results_dir or (output_dir() / "gui_runs")
+        target.mkdir(parents=True, exist_ok=True)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(target)))
+
     def export_record(self) -> None:
         if self.record is None:
             return
-        d = QtWidgets.QFileDialog.getExistingDirectory(self, "Export directory", str(PROJECT_ROOT / "output"))
+        d = QtWidgets.QFileDialog.getExistingDirectory(self, "Export directory", str(output_dir()))
         if d:
             paths = export_record(self.record, d, formats=("csv", "parquet", "json"))
             self.statusBar().showMessage("Wrote " + ", ".join(p.name for p in paths))
 
-    # ---------------------------------------------------------------------------------- graphs
     def selected_vars(self) -> list[str]:
         return [i.data(Qt.ItemDataRole.UserRole) for i in self.var_list.selectedItems()]
 
@@ -445,7 +579,6 @@ class MainWindow(QtWidgets.QMainWindow):
         )
         self.update_3d_dynamic(i)
 
-    # ------------------------------------------------------------------------------------ 3-D
     def draw_3d_static(self) -> None:
         rec = self.record
         ax = self.ax3d
@@ -503,11 +636,8 @@ class MainWindow(QtWidgets.QMainWindow):
             )
         self.canvas3d.draw_idle()
 
-    # ------------------------------------------------------------------------- dataset browser
     def open_dataset(self, path: str | None = None) -> None:
-        d = path or QtWidgets.QFileDialog.getExistingDirectory(
-            self, "Dataset directory", str(PROJECT_ROOT / "output")
-        )
+        d = path or QtWidgets.QFileDialog.getExistingDirectory(self, "Dataset directory", str(output_dir()))
         if not d:
             return
         try:

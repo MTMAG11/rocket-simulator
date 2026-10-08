@@ -16,8 +16,8 @@ table       Cd(Mach) lookup (e.g. a team's RASAero/CFD/wind-tunnel curve), coast
 table2d     full Cd/Cl/Cm(Mach, alpha) lookup from a file (CFD / wind-tunnel / OpenRocket export).
 constant    fixed numbers (analysis and unit tests).
 
-Coefficient interface (spec: Cd, Cl, Cm as functions of Mach, alpha, Reynolds, geometry)
------------------------------------------------------------------------------------------
+Coefficient interface
+---------------------
 ``coefficients(mach, reynolds, powered)`` -> small-angle data (cd0, CNa, x_cp), and the generic
 ``force_coefficients(mach, alpha, reynolds, powered)`` -> body-axis (CA, CN) plus the CP of the normal force,
 valid for the full angle-of-attack range 0..pi. Wind-axis coefficients are derived consistently:
@@ -43,7 +43,7 @@ References
     Helmbold/Diederich lift slope, supersonic Ackeret lift slope).
 [5] Ackeret linear theory for supersonic thin-airfoil lift and wave drag.
 
-Accuracy (honest): Barrowman normal force/CP is valid for small alpha and subsonic-low-transonic Mach; the
+Accuracy: Barrowman normal force/CP is valid for small alpha and subsonic-low-transonic Mach; the
 transonic regime (M ~ 0.8-1.2) in the enhanced model is a smooth blend between two linear-theory limits and
 carries +-30-50 % uncertainty in fin CNa and wave drag; component drag is good to roughly +-10-15 % subsonic.
 Boat-tail separation uses a rule-of-thumb threshold. Reynolds number enters through skin friction only.
@@ -129,7 +129,7 @@ class ProvItem:
 class AeroProvenance:
     """Provenance of every aerodynamic quantity a model supplies, plus its stated range of applicability.
 
-    ``reynolds_dependence`` states honestly how (or whether) Reynolds number enters: it is NOT silently assumed."""
+    ``reynolds_dependence`` states how (or whether) Reynolds number enters."""
 
     model: str
     drag: ProvItem
@@ -275,7 +275,6 @@ class AerodynamicModel(ABC):
         x_cp = (cn_lin * c.x_cp + cn_cf * self.x_crossflow) / cn if cn > 1e-12 else c.x_cp
         return ForceCoefficients(c.cd0 * ca_, cn, x_cp, c.x_cp)
 
-    # -- wind-axis / moment coefficients derived from the force coefficients -----------------------
     def cd(self, mach: float, alpha: float, reynolds: float, powered: bool = False) -> float:
         """Drag coefficient (wind axes): D = CA cos(alpha) + CN sin(alpha)."""
         f = self.force_coefficients(mach, alpha, reynolds, powered)
@@ -476,11 +475,8 @@ class Table2DAero(AerodynamicModel):
         return ForceCoefficients(axial, max(cn, 0.0), x_cp, self._cp_static(mach))
 
 
-# ------------------------------------------------------------------------------------------------
-# component drag helpers
-# ------------------------------------------------------------------------------------------------
 def stagnation_pressure_coefficient(mach: float) -> float:
-    """Stagnation pressure coefficient (compressible Pitot), Niskanen (2013) eq. 3.xx."""
+    """Stagnation pressure coefficient (compressible Pitot)."""
     if mach < 1.0:
         return 1.0 + mach**2 / 4.0 + mach**4 / 40.0
     return 1.84 - 0.76 / mach**2 + 0.166 / mach**4 + 0.035 / mach**6
@@ -636,7 +632,6 @@ class BarrowmanAero(AerodynamicModel):
         self._nose_half_angle = math.atan2(0.5 * nose.d_aft, nose.length)
         self._nose_area_ratio = (nose.d_aft / d) ** 2
 
-        # -- Barrowman normal force and centre of pressure ----------------------------------------
         comps = list(asm.section_normal_force())  # (cna, x_cp, kind)
         fins = asm.fins
         self._cn_fins = 0.0
@@ -705,7 +700,6 @@ class BarrowmanAero(AerodynamicModel):
         self._cos2_le = math.cos(fins.leading_edge_sweep_angle) ** 2 if fins.count else 1.0
         self._fin_tc = (fins.thickness / fins.mean_chord) if fins.count else 0.0
 
-    # -- static stability data ---------------------------------------------------------------------
     @property
     def cn_alpha_total(self) -> float:
         return self._cn_static
@@ -714,7 +708,6 @@ class BarrowmanAero(AerodynamicModel):
     def x_cp_subsonic(self) -> float:
         return self._x_cp
 
-    # -- drag -------------------------------------------------------------------------------------
     def _drag(self, mach: float, reynolds: float, powered: bool) -> float:
         s_ref = self.ref_area
         re_body = max(reynolds, 1.0)

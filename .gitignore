@@ -10,3 +10,8 @@ output/
 
 .mypy_cache/
 .ruff_cache/
+dist/
+build/
+*.spec
+experiments/
+logs/

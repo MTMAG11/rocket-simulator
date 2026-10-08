@@ -147,7 +147,6 @@ def test_mach_logged_from_relative_speed():
     assert e.sos == pytest.approx(340.294, rel=1e-5)
 
 
-# ------------------------------------------------------------------------------------- 6-DOF
 def test_6dof_torque_free_axisymmetric_precession():
     """Euler's equations for Ixx != Iyy: transverse rate rotates at -lambda*p, |w| conserved."""
     ixx, iyy = 0.002, 0.08

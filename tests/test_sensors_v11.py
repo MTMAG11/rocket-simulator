@@ -154,7 +154,6 @@ def test_sensor_seed_reproducibility_with_dropout():
     assert [t for t, _ in a] == [t for t, _ in b] and np.allclose([v for _, v in a], [v for _, v in b])
 
 
-# --------------------------------------------------------------------------------- estimators
 def test_truth_estimator_passes_state_and_requires_truth():
     est = build_estimator(EstimatorCfg(type="truth"), SensorsCfg(), ConstantGravity(), 0.0)
     assert isinstance(est, TruthEstimator)

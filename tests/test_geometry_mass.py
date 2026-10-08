@@ -28,7 +28,6 @@ def stack(*secs):
     return out
 
 
-# --------------------------------------------------------------------------- centre of pressure
 def test_barrowman_nose_and_fins_against_hand_calculation():
     """Textbook numbers: d = 0.05, ogive nose 0.15 m, 4 fins (Cr 0.1, Ct 0.05, s 0.06, sweep 0.04) at 0.55."""
     d, ln = 0.05, 0.15
@@ -122,7 +121,6 @@ def test_local_radius_and_areas():
     assert asm.ref_diameter == 0.06  # largest diameter by default
 
 
-# -------------------------------------------------------------------------------- centre of mass
 def test_cg_computed_from_components_and_shifts_during_burn():
     cs = [MassComponent("front", 1.0, 0.3), MassComponent("rear", 2.0, 0.9)]
     mm = MassModel(cs, propellant_x=0.8, propellant_radius=0.01, propellant_length=0.1)
@@ -149,7 +147,6 @@ def test_vehicle_cg_from_sections_in_a_full_config():
     assert {"nose", "avionics", "recovery", "fins", "motor_casing"} <= names
 
 
-# --------------------------------------------------------------------------------------- inertia
 def test_cylinder_inertia_formulas():
     ixx, iyy = solid_cylinder_inertia(2.0, 0.05, 0.4)
     assert ixx == pytest.approx(0.5 * 2.0 * 0.05**2) and iyy == pytest.approx(

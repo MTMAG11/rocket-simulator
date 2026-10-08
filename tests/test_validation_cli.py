@@ -111,7 +111,6 @@ def test_uncertainty_formatting_never_fakes_precision():
     )  # fidelity < 2: no model uncertainty claimed
 
 
-# ------------------------------------------------------------------------------------ CLI
 def test_cli_simulate_exports_and_reports(tmp_path, capsys):
     rc = main(
         [

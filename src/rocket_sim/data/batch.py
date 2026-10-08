@@ -51,7 +51,6 @@ from .spec import BatchSpec
 Progress = Callable[[int, int, int, int], None]
 
 
-# --------------------------------------------------------------------------------------------
 def load_spec(path: str | Path, validate: bool = True) -> tuple[BatchSpec, Path]:
     """Parse a batch spec. ``validate=False`` lets the CLI apply --runs before validation
     (``run_batch`` always validates)."""
@@ -131,7 +130,6 @@ def _flatten(prefix: str, d: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-# --------------------------------------------------------------------------------------------
 def execute_chunk(task: dict[str, Any]) -> dict[str, Any]:
     """Simulate runs [start, stop) of one split; write the shard + completion marker."""
     spec: BatchSpec = from_dict(BatchSpec, task["spec"])
@@ -281,7 +279,6 @@ def _json_default(o: Any) -> Any:
     return str(o)
 
 
-# --------------------------------------------------------------------------------------------
 def _plan_chunks(spec: BatchSpec) -> list[dict[str, Any]]:
     chunks = []
     for split, sp in spec.split_table().items():

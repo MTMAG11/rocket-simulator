@@ -39,7 +39,6 @@ def barrowman(**kw):
     return BarrowmanAero(asm, 0.0172, **kw)
 
 
-# ------------------------------------------------------------------------------ interface
 def test_wind_axis_coefficients_are_consistent_with_body_axis_forces():
     a = barrowman()
     for alpha in (0.0, 0.05, 0.2, 0.7, 1.4):
@@ -96,7 +95,6 @@ def test_normal_force_is_symmetric_about_90_degrees_and_cp_moves_with_crossflow(
     assert big.x_cp_force != big.x_cp_static  # crossflow pulls the force CP toward the body centroid
 
 
-# --------------------------------------------------------------------------------- Reynolds
 def test_skin_friction_reynolds_and_roughness_trends():
     cf = lambda re, m=0.0, k=0.0: skin_friction_coefficient(re, m, k, 1.0)  # noqa: E731
     assert cf(1e5) == pytest.approx(1.328 / math.sqrt(1e5))  # laminar Blasius
@@ -144,7 +142,6 @@ def test_reynolds_number_definition_in_dynamics():
     )
 
 
-# ------------------------------------------------------------------------------------ Mach
 def test_mach_dependence_of_drag_components():
     # the two branches of the Niskanen fit meet to < 0.6 % at M = 1 (1.275 vs 1.281)
     assert stagnation_pressure_coefficient(0.999999) == pytest.approx(
@@ -220,7 +217,6 @@ def test_simplified_model_constant_cd_but_geometry_stability():
     ).cd0 == pytest.approx(0.54)
 
 
-# --------------------------------------------------------------------- boat-tails / transitions
 def _vehicle_asm(secs):
     out, x = [], 0.0
     for k, ln, d1, d2 in secs:
@@ -265,7 +261,6 @@ def test_expansion_step_adds_pressure_drag():
     assert shoulder.coefficients(0.3, 5e6, False).cd0 > straight.coefficients(0.3, 5e6, False).cd0
 
 
-# ---------------------------------------------------------------- angle of attack geometry (6-DOF)
 @pytest.mark.parametrize(
     "el,az,roll,v,wind",
     [
@@ -341,7 +336,6 @@ def test_restoring_moment_direction_and_magnitude_in_6dof():
     assert nose_rate_dir[2] > 0 and abs(ev.wdot[2]) < 1e-9 and abs(ev.wdot[0]) < 1e-9
 
 
-# ---------------------------------------------------------------------------- lookup tables
 def test_table_aero_interpolates_and_keeps_stability_data():
     t = TableAero(0.05, [0.0, 0.5, 1.0], [0.4, 0.5, 0.9], 8.0, 0.7, [0.3, 0.4, 0.8])
     assert t.coefficients(0.25, 1e6, False).cd0 == pytest.approx(0.45)

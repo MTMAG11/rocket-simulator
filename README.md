@@ -1,124 +1,136 @@
 # Rocket Simulator
 
-A physics-based rocket flight simulation and data-generation platform: the foundation for developing guidance,
-navigation and control (GNC) for an autonomous **solid-motor** rocket (predetermined thrust curve, TVC / fin control
-authority) and for generating large, reproducible datasets for machine learning.
+Flight simulator and dataset generator for solid-motor rockets, used to develop guidance, navigation and control (GNC)
+for an autonomous rocket. It simulates 6-DOF flight from a physical vehicle description and a motor thrust curve, models
+sensors, state estimation and actuators, and generates reproducible Monte Carlo datasets.
 
-> Status: research-grade tool (V1.2). Against **seven** 7-24 kg solid-motor flights (barometer-equivalent altitude, unmeasured
-> wind/temperature, parameters from a secondary source) it predicts apogee to -6.4 ... +13.4 % (RMS 6.2 %). Only **two** of
-> those flights are true hold-outs (RMS 5.5 %, n = 2: provisional); three are development flights (in-sample) and two are
-> calibration flights. A global drag calibration was tested and **rejected**. It is **not validated** for small model rockets
-> (< ~5 kg), supersonic flight, attitude/TVC/fin-control dynamics or sensors on real data. Not certified, not "NASA-level"
-> (see [docs/validation.md](docs/validation.md) and [docs/error_budget.md](docs/error_budget.md)).
+## Quick Start
 
-## What it does (V1.2: physical vehicle + HIL foundation)
+### Option 1: Windows executable
 
-* **A real rocket can be entered without magic numbers**: a versioned, human-readable `vehicle.json` of physical components (nose,
-  tubes, transitions/boat-tails, fins, avionics, battery, payload, recovery, motor mount, control surfaces) with mass, position,
-  dimensions, material and optional CAD inertia tensor. The simulator **derives** total/dry/propellant mass, CG (and its shift during the
-  burn), the full 3x3 inertia tensor, CP, static margin and the aerodynamic inputs: `rocketsim vehicle vehicles/example_tvc_demo.json`
-  ([docs/vehicle_format.md](docs/vehicle_format.md)). The example vehicle is a **placeholder**, not a measured rocket.
-* **Truth / measurement / estimate / command / actual are separated and tested**: every telemetry column has a role; the estimator
-  is given measurements only (bit-exact replay test); the controller is fed the estimate unless a truth shortcut is explicitly chosen
-  (recorded and warned about); aerodynamic **provenance** is recorded per quantity and per dataset row.
-* **HIL foundation**: protocol v2 (every timestamped sensor sample in, commands out), loopback / child-process / record / replay
-  transports, a lock-step headless loop, a Python reference flight computer, and an explicit timing model with compute/uplink/downlink
-  latency ([docs/hil.md](docs/hil.md)). **No physical hardware has been connected.**
-* What is implemented vs verified vs validated: [docs/status_matrix.md](docs/status_matrix.md).
+1. Unzip `RocketSimulator-<version>-win64.zip`. Keep the folder intact.
+2. Run `RocketSimulator\RocketSimulator.exe`.
 
-## What it does (V1.1 and earlier)
+No release is published yet; build it with one command (see [docs/packaging.md](docs/packaging.md)). The executable is
+unsigned, so SmartScreen may ask for confirmation.
 
-* 6-DOF rigid-body flight (quaternion attitude, RK4 with event location), plus faster 3-DOF/1-D levels and a fast mode
-* Real motor thrust curves (`.eng`), mass depletion, mass/inertia/CG/CP history, static margin
-* ISA atmosphere (or measured/simplified), `g(h)`, wind (constant/profile/power-law/turbulence/gusts) via *relative* air velocity
-* **Aerodynamic model hierarchy** (simplified / Barrowman / enhanced / lookup / 2-D lookup-for-CFD) behind one
-  `CD/CL/Cm(M, alpha, Re, geometry)` interface ([docs/aerodynamics.md](docs/aerodynamics.md))
-* **Component-based airframe** (nose, tubes, transitions, boat-tails, fins, motor section, payload): CG and the full inertia
-  tensor computed from component masses, CP from geometry, static margin logged ([docs/vehicle.md](docs/vehicle.md))
-* TVC **and aerodynamic control surfaces** (fins/canards with deflection, rate, lag, delay; a mixer; roll control) driven by a
-  reusable actuator model - the physics always sees the *actual* actuator state
-* Simulated sensors (accelerometer, gyro, barometer, GPS with dropout/start-up delay, magnetometer; misalignment, async
-  rates, latency), an `Estimator` interface (truth / linear Kalman filter; **no EKF yet**, design in [docs/sensors.md](docs/sensors.md))
-* Flight phases, ground/terrain impact, parachutes (drogue + main)
-* Monte Carlo + parallel, checkpointed, reproducible dataset generation (Parquet/NPZ), ML windows, quality gates,
-  **domain randomisation with explicit, correlated and linked distributions**, causal (zero-order-hold) inputs,
-  near-duplicate/temporal leakage tests, statistics reports, versioned experiments, 1/100/1000/10000-run benchmarks
-* Real-flight validation: flight registry with source tiers and a DEVELOPMENT / CALIBRATION / HOLDOUT protocol (logged,
-  fingerprinted), input-uncertainty Monte Carlo, calibration records, sensitivity study and error budget; CLI; PySide6 GUI
+### Option 2: Run from source
 
-## Quick start
+Requires Python 3.11 (the version used for development and testing) and Git.
+
+```powershell
+git clone https://github.com/MTMAG11/rocket-simulator.git
+cd rocket-simulator
+py -3.11 -m venv .venv
+.venv\Scripts\activate
+pip install -e .
+python -m rocket_sim
+```
+
+If PowerShell blocks `activate`, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or call the environment's
+Python directly (`.venv\Scripts\python.exe -m rocket_sim`). `pip install` downloads about 500 MB, mostly Qt.
+
+On later runs, double-click `run_simulator.bat`, or activate the environment and run `python -m rocket_sim`. The command works
+from any directory. `python -m rocket_sim --check` verifies the data files and the GUI library.
+
+### Using the GUI
+
+Choose a vehicle and motor, set launch elevation and wind, and press Run simulation. Fidelity, timestep, seed and other
+settings are under Advanced settings. Each run is saved (telemetry CSV, summary, overview plot) under `output/gui_runs/`
+(source) or `Documents\RocketSimulator\output\gui_runs\` (executable). The bundled vehicles are placeholders, not measured rockets.
+
+## Capabilities
+
+* 6-DOF rigid-body flight (quaternion attitude, RK4 with event location), with 3-DOF and 1-D levels for fast runs.
+* Motor thrust curves from `.eng` files, with mass, CG and inertia-tensor history and static margin.
+* Vehicle described as components in a versioned `vehicle.json`; mass, CG, inertia tensor, CP and static margin are derived
+  ([docs/vehicle_format.md](docs/vehicle_format.md)). `rocketsim vehicle FILE` prints the report.
+* Aerodynamics behind one `CD/CL/Cm(M, alpha, Re, geometry)` interface: simplified, Barrowman, enhanced, table and 2-D table
+  models, with per-quantity provenance ([docs/aerodynamics.md](docs/aerodynamics.md)).
+* TVC and aerodynamic control surfaces with deflection, rate, lag and delay limits; the physics uses the actual actuator state.
+* Sensors (accelerometer, gyro, barometer, GPS, magnetometer), a linear Kalman filter, and a controller interface. Truth,
+  measurement, estimate, command and actual state are separate columns in the telemetry ([docs/sensors.md](docs/sensors.md)).
+* HIL foundation: a wire protocol, loopback / child-process / record / replay transports, a reference flight computer and an
+  explicit timing model ([docs/hil.md](docs/hil.md)). No hardware has been connected.
+* Atmosphere, wind (constant, profile, turbulence, gusts), terrain and parachutes.
+* Parallel, checkpointed Monte Carlo dataset generation (Parquet/NPZ) with quality gates, correlated parameters and leakage checks.
+* Validation against real flights with a development / calibration / holdout protocol and a logged holdout evaluation
+  ([docs/validation.md](docs/validation.md)).
+
+What is implemented, analytically checked, cross-checked and validated, per capability: [docs/status_matrix.md](docs/status_matrix.md).
+
+## Command line
+
+`rocketsim <command>` or `python -m rocket_sim <command>`. `pip install -e ".[dev]"` adds the test tools.
 
 ```bash
-pip install -e ".[gui,dev]"
 rocketsim simulate configs/example_g80.yaml --plot flight.png
 rocketsim batch configs/batch_example.yaml --runs 100
 rocketsim generate-dataset configs/dataset_example.yaml --runs 100
-rocketsim vehicle vehicles/example_tvc_demo.json        # derived mass properties / CG / inertia / CP
-rocketsim timing configs/example_tvc_closed_loop.yaml    # every rate and latency
-rocketsim hil configs/example_tvc_closed_loop.yaml --log loop.jsonl   # headless HIL run
+rocketsim vehicle vehicles/example_tvc_demo.json
+rocketsim timing configs/example_tvc_closed_loop.yaml
+rocketsim hil configs/example_tvc_closed_loop.yaml --log loop.jsonl
 rocketsim validate-registry --split development --out validation_results/registry_dev
 rocketsim experiment configs/experiment_example.yaml
-rocketsim gui
 pytest
 ```
 
+Example `simulate` summary:
+
 ```text
-Apogee (AGL)               918 +/- 70* m        (rounded to an uncertainty extrapolated from the 20 kg-class
-Max velocity               198 +/- 16 m/s       validation; the 29 mm example vehicle itself is NOT validated)
+Apogee (AGL)               918 +/- 70* m
+Max velocity               198 +/- 16 m/s
 Static margin at launch    3.1 cal
 ```
+
+`*` marks an uncertainty extrapolated from the validation flights; the 29 mm example vehicle itself is not validated.
+
+## Limitations
+
+Validated against seven 7-24 kg solid-motor flights, apogee error is -6.4 % to +13.4 % (RMS 6.2 %); only two of those are
+holdouts (n = 2). Not validated: small rockets (< ~5 kg), transonic/supersonic flight, and any vehicle, actuator, sensor,
+estimator or HIL model against real hardware or a weighed vehicle. Further limits:
+
+* Drag level uncertain to about 7 %; unmeasured inputs alone move apogee 3-7 % (1 sigma).
+* Flat, non-rotating Earth; no fin flutter, hinge moments or rail tip-off.
+* Linear Kalman filter, not an EKF; default sensor parameters are generic.
+* No serial/UDP transport or real-time pacing for HIL.
+* Ground truth is amateur-grade (tiers 2/3).
+
+Full lists: [docs/validation.md](docs/validation.md), [docs/error_budget.md](docs/error_budget.md), [docs/physics.md](docs/physics.md).
 
 ## Documentation
 
 | | |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | language decision, pipeline, packages, design principles |
-| [docs/physics.md](docs/physics.md) | every model: equations, assumptions, sources, limitations, convergence, change log |
-| [docs/aerodynamics.md](docs/aerodynamics.md) | aerodynamic model hierarchy, coefficient interface, accuracy by regime |
-| [docs/vehicle_format.md](docs/vehicle_format.md) | the vehicle file: conventions, schema, derived quantities, CAD/OpenRocket mapping |
-| [docs/vehicle.md](docs/vehicle.md) | component airframe, CG/inertia, actuator chain, control surfaces, TVC audit |
-| [docs/hil.md](docs/hil.md) | HIL protocol, transports, timing model, what is and is not implemented |
-| [docs/status_matrix.md](docs/status_matrix.md) | implemented / analytic / numerical / cross-checked / validated, per capability |
-| [docs/sensors.md](docs/sensors.md) | sensor audit, estimator interface, EKF roadmap |
-| [docs/frames.md](docs/frames.md) | frames, axes, quaternions, angle and wind conventions |
 | [docs/usage.md](docs/usage.md) | install, configuration, controllers, CLI, GUI |
-| [docs/config_reference.md](docs/config_reference.md) | every configuration key (generated) |
-| [docs/datasets.md](docs/datasets.md) | batch/dataset generation, schema, reproducibility, ML use |
-| [docs/schema.md](docs/schema.md) | telemetry schema v1.2.0 (generated) |
-| [docs/validation.md](docs/validation.md) | flight registry, splits and tiers, results, holdout log, calibration record, cross-checks, limits |
-| [docs/error_budget.md](docs/error_budget.md) | sensitivity study, model-form study, physics error budget |
-| [docs/testing.md](docs/testing.md) | test strategy |
-| [docs/performance.md](docs/performance.md) | benchmarks |
-| [docs/review/](docs/review/) | V1.1 audit and independent critic reviews with the fixes they triggered |
+| [docs/packaging.md](docs/packaging.md) | resource paths, Windows launcher and executable build |
+| [docs/architecture.md](docs/architecture.md) | pipeline, packages, design principles |
+| [docs/physics.md](docs/physics.md) | models, assumptions, convergence, change log |
+| [docs/aerodynamics.md](docs/aerodynamics.md) | aerodynamic models, coefficient interface, accuracy |
+| [docs/frames.md](docs/frames.md) | frames, axes, quaternions, wind conventions |
+| [docs/vehicle_format.md](docs/vehicle_format.md) | vehicle file format, derived quantities, CAD/OpenRocket mapping |
+| [docs/vehicle.md](docs/vehicle.md) | airframe, CG/inertia, actuator chain, control surfaces |
+| [docs/sensors.md](docs/sensors.md) | sensor models, estimator interface |
+| [docs/hil.md](docs/hil.md) | HIL protocol, transports, timing |
+| [docs/datasets.md](docs/datasets.md) | batch and dataset generation, reproducibility |
+| [docs/validation.md](docs/validation.md) | flight registry, splits, results, holdout log |
+| [docs/error_budget.md](docs/error_budget.md) | sensitivity study and error budget |
+| [docs/status_matrix.md](docs/status_matrix.md) | implementation and validation status |
+| [docs/config_reference.md](docs/config_reference.md), [docs/schema.md](docs/schema.md) | configuration keys and telemetry schema (generated) |
+| [docs/testing.md](docs/testing.md), [docs/performance.md](docs/performance.md) | tests and benchmarks |
 
 ## Repository layout
 
 ```
-src/rocket_sim/   config  environment  motor  vehicle  physics  simulation  sensors  estimation  control  data  validation  ui
-configs/          example vehicle, batch and dataset specs
-data/motors/      .eng thrust curves
-validation_data/  flight registry, real-flight definitions and raw telemetry, calibration records, RocketPy cross-checks
-validation_results/  recorded validation outputs, holdout log, input-uncertainty MC, sensitivity/error-budget data
-experiments/      versioned dataset experiments (created on demand)
-tests/  docs/  scripts/
+src/rocket_sim/      simulator package
+configs/             example vehicle, batch and dataset configs
+vehicles/            example vehicle file and its JSON schema
+data/motors/         .eng thrust curves
+validation_data/     flight registry, real-flight definitions and telemetry, RocketPy cross-checks
+validation_results/  recorded validation outputs and the holdout log
+tests/  docs/  scripts/  packaging/
 ```
 
-## Known limitations (summary)
-
-Drag level uncertain to ~7 % (see the error budget); unmeasured inputs alone move apogee 3-7 % (1 sigma); no transonic or
-supersonic flight validation (the enhanced fin model is verified analytically only, and one holdout flight, Erebus 11, has an
-unexplained burnout-speed gap); no validation below ~5 kg; **no vehicle, actuator, sensor, estimator or HIL model has been validated against real hardware or a weighed vehicle**; no serial/UDP transport or real-time pacing; flat non-rotating Earth; no fin flutter, hinge moments, rail
-tip-off; control surfaces, TVC, sensors and the Kalman filter verified in simulation only (no real flight data exist for
-them in the registry); linear Kalman filter, not an EKF; sensor defaults are generic; amateur-grade ground truth (Tier 2/3,
-no Tier 1). Full list in [docs/validation.md](docs/validation.md), [docs/error_budget.md](docs/error_budget.md) and
-[docs/physics.md](docs/physics.md).
-
-## Motor data
-
-Thrust curves are RASP `.eng` files from ThrustCurve.org; keeping them separate from the physics makes motor swaps
-trivial. The validation motors are in `validation_data/raw/` (three original `.eng` files; for the EuRoC flights, derived copies with the casing removed, documented in their header, and one curve converted from a RocketPy CSV).
-
-## About
-
-Part of an Autonomous Rocket Project: built from the ground up to learn the physics, mathematics and engineering behind
-autonomous rocket flight, now structured so the same engine can drive large-scale simulation for control and learning.
+Motor thrust curves are RASP `.eng` files from ThrustCurve.org. The validation motors are in `validation_data/raw/`; the EuRoC
+curves are derived copies with the casing removed (documented in their headers).

@@ -1,8 +1,7 @@
 # Hardware-in-the-loop (HIL) foundation and timing model
 
-Status: **a software-only foundation.** The boundary, the protocol, the transports, the timing model and a headless loop exist and are
-tested. **No physical flight computer (ESP32) has ever been connected**, there is no serial/UDP transport, no real-time pacing and
-no firmware. Everything below says which is which.
+Status: software only. The boundary, protocol, transports, timing model and a headless loop exist and are tested. No physical
+flight computer has been connected; there is no serial/UDP transport, real-time pacing or firmware.
 
 ```
 SIMULATION PHYSICS (truth) -> sensor models -> [ protocol v2 ] -> FLIGHT COMPUTER -> command -> [ + compute/downlink latency ]

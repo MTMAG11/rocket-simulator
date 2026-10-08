@@ -19,7 +19,7 @@ frame, driven by gyro-integrated attitude:
                (the flight computer does not "know" the launch time). Before detection, a
                zero-velocity/zero-position update holds the pad solution.
 
-Not implemented (and not claimed): accelerometer/gyro bias estimation, an error-state EKF with
+Not implemented: accelerometer/gyro bias estimation, an error-state EKF with
 attitude covariance, GPS lever arm, outlier rejection. Replace with an EKF later without
 touching the rest of the pipeline: any object with this interface works.
 """
@@ -227,7 +227,6 @@ class NavigationFilter(Estimator):
         self._r_gps_p = max(sg.noise_std, 0.1) ** 2 + 0.25
         self._r_gps_v = max(sg.noise_std * 0.05, 0.02) ** 2 + 0.01
 
-    # ----------------------------------------------------------------------------------------
     def _baro_altitude(self, pressure: float) -> float:
         try:
             return self.isa.pressure_to_altitude(max(pressure, 1.0)) - self._h_ref

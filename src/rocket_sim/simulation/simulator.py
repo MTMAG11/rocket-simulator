@@ -130,7 +130,6 @@ class Simulation:
             if sm <= 0.0:
                 self.warnings.append("vehicle is statically UNSTABLE at launch (cp ahead of cg)")
 
-    # ------------------------------------------------------------------------------------------
     def _design_data(self) -> dict:
         """DESIGN knowledge handed to a flight computer: the nominal gimbal-authority schedule against time since ignition, gravity,
         site elevation, launch axis and alignment time. Never the instantaneous true state."""
@@ -238,7 +237,6 @@ class Simulation:
 
         return authority
 
-    # ------------------------------------------------------------------------------------------
     def run(self) -> FlightRecord:
         wall0 = _time.perf_counter()
         cfg, veh, env, dyn = self.cfg, self.vehicle, self.env, self.dyn
@@ -452,7 +450,6 @@ class Simulation:
         while True:
             ev = dyn.evaluate(t, y)
 
-            # ---- sensors -> estimator -> controller -> actuator command --------------------
             if self.sensors is not None:
                 rd = latest_readings = self.sensors.update(
                     t,
@@ -566,7 +563,6 @@ class Simulation:
                 while next_ctrl <= t + _EPS:
                     next_ctrl += ctrl_period
 
-            # ---- phase machine ------------------------------------------------------------
             if not burnout_done and t >= t_burn - _EPS:
                 burnout_done = True
                 log_event("burnout", t, y)
@@ -613,7 +609,6 @@ class Simulation:
                 self.warnings.append("vehicle never left the pad (thrust-to-weight < 1?)")
                 break
 
-            # ---- choose the step ---------------------------------------------------------------
             h = min(dt_descent if apogee_done else dt_max, t_max - t)
             while breaks and breaks[0] <= t + _EPS:
                 heapq.heappop(breaks)
@@ -636,7 +631,6 @@ class Simulation:
             if not np.all(np.isfinite(y_new)):
                 raise SimulationError(f"non-finite state at t={t:.4f} s (step {n_steps})")
 
-            # ---- zero-crossing events -----------------------------------------------------------
             t_new = t + h
             candidates: list[tuple[float, str, np.ndarray]] = []
 

@@ -1,7 +1,7 @@
 # Testing
 
 ```bash
-pytest                      # ~430 tests (3 real-flight regression tests are marked slow)
+pytest                      # ~460 tests (3 real-flight regression tests are marked slow)
 pytest -m "not slow"        # skip the slow tests
 ruff check src tests && ruff format --check src tests
 mypy src/rocket_sim
@@ -21,13 +21,13 @@ Expected answers come from closed-form physics or independent data wherever poss
 | `test_gnc.py` | sensor statistics, bias walk, quantisation, saturation, rate, latency, truth != measurement, TRIAD, gyro integration, launch detector, Kalman filter accuracy, actuator, closed-loop TVC stabilisation of an unstable vehicle |
 | `test_validation_cli.py` | metrics, telemetry import, self-consistency of the comparison pipeline, real-flight regression guards, uncertainty formatting, CLI |
 | `test_golden.py` | tight (1e-9) golden numbers keyed to `PHYSICS_VERSION` (3-DOF and 6-DOF reference runs) |
-| `test_geometry_mass.py` (V1.1) | Barrowman by hand, telescoping invariant, boat-tail, assembly validation, CG from components and burn shift, inertia tensor vs independent summation, parallel axis, Euler invariants for an asymmetric body |
-| `test_aero_v11.py` (V1.1) | model hierarchy interface (CD/CL/Cm), small-angle limits, alpha/beta relative-wind geometry independent of the simulator, Reynolds/Mach trends, enhanced fin lift vs Helmbold/Ackeret, fin stall, boat-tail attached/separated, lookup and 2-D table models |
-| `test_control_v11.py` (V1.1) | TVC zero/+/-/max gimbal, actuator saturation/rate/lag/delay exactness, physics uses the ACTUAL actuator state, control-fin force/moment analytics, mixer decoupling, closed-loop fin stabilisation |
-| `test_sensors_v11.py` (V1.1) | GPS dropout rate and start-up delay, velocity vs position noise, misalignment, async rates and latency, truth estimator, TRIAD with declination, gyro-bias recovery |
-| `test_numerics_v11.py` (V1.1) | quaternion algebra and long-run integration, conservation limits (no force / gravity / thrust / drag / torque), 5-step convergence ladder |
-| `test_dataset_v11.py` (V1.1) | copula marginals and dependence, linked parameters, near-duplicate and temporal-leakage detectors (with negative controls), statistics/KS/traceability in the manifest, quality-gate classes, versioned experiment reproduction |
-| `test_validation_v11.py` (V1.1) | registry/splits, AST fingerprint, holdout skip/log/stale/migration, calibration record, documented-number guards, input-uncertainty sampler |
+| `test_geometry_mass.py` | Barrowman by hand, telescoping invariant, boat-tail, assembly validation, CG from components and burn shift, inertia tensor vs independent summation, parallel axis, Euler invariants for an asymmetric body |
+| `test_aero_v11.py` | model hierarchy interface (CD/CL/Cm), small-angle limits, alpha/beta relative-wind geometry independent of the simulator, Reynolds/Mach trends, enhanced fin lift vs Helmbold/Ackeret, fin stall, boat-tail attached/separated, lookup and 2-D table models |
+| `test_control_v11.py` | TVC zero/+/-/max gimbal, actuator saturation/rate/lag/delay exactness, physics uses the ACTUAL actuator state, control-fin force/moment analytics, mixer decoupling, closed-loop fin stabilisation |
+| `test_sensors_v11.py` | GPS dropout rate and start-up delay, velocity vs position noise, misalignment, async rates and latency, truth estimator, TRIAD with declination, gyro-bias recovery |
+| `test_numerics_v11.py` | quaternion algebra and long-run integration, conservation limits (no force / gravity / thrust / drag / torque), 5-step convergence ladder |
+| `test_dataset_v11.py` | copula marginals and dependence, linked parameters, near-duplicate and temporal-leakage detectors (with negative controls), statistics/KS/traceability in the manifest, quality-gate classes, versioned experiment reproduction |
+| `test_validation_v11.py` | registry/splits, AST fingerprint, holdout skip/log/stale/migration, calibration record, documented-number guards, input-uncertainty sampler |
 
 `conftest.py` drives the dynamics directly with constructed vehicles for the analytic tests.
 
@@ -54,3 +54,4 @@ latency ignored by the filter, off-by-one handling of loop variables in the even
 | `test_truth_separation.py` | estimator never given truth; **bit-exact replay of logged measurements through a fresh filter**; controller input equals the logged estimate, not the truth; state-source flags and refusals; ideal sensor == true specific force; noise statistics; saturation; barometer derivation; seeded determinism; column roles |
 | `test_aero_provenance.py` | provenance for every model, estimate never labelled measured, declared Re dependence matches behaviour, dataset/record propagation, coefficient bounds and consistency over the whole envelope, Barrowman hand calculation + regression pins, RocketPy cross-check of the example vehicle |
 | `test_hil_v12.py` | protocol encoding/validation, lock-step loop, every sample delivered, no truth across the boundary, uplink and compute/downlink latency, bit-identical live runs, replay without a flight computer and divergence detection, child-process transport == in-process, dead process, closed-loop stabilisation and latency degradation, timing report, CLI |
+| `test_launch.py` | resource-root resolution (source / frozen layout / `ROCKETSIM_HOME`), incomplete-install messages, no stray `__file__` path arithmetic, launch from any working directory, single version source, vehicle/motor catalog, the GUI off-screen (every vehicle loads, motor swap changes the flight, results saved and shown, failures are messages), self-test report |

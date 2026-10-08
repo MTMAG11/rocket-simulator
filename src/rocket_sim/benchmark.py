@@ -20,6 +20,7 @@ from .config import load_config
 from .config.loader import PROJECT_ROOT
 from .data.batch import run_batch
 from .data.spec import BatchSpec, DatasetSection, FeatureSpec, WindowSpec
+from .resources import output_dir
 from .simulation import run_simulation
 
 _EXAMPLE = PROJECT_ROOT / "configs" / "example_g80.yaml"
@@ -115,8 +116,7 @@ def run_benchmarks(quick: bool = False, workers: int = 0, scales: tuple[int, ...
     single("single: L2 FAST, dt=0.02", 2, True, 0.02, 0.1)
     del cfg
 
-    # scaling ladder (V1.1): 1 / 100 / 1000 / 10000 runs. ML-style windowed datasets at L2 FAST for every rung; the
-    # heavyweight L3 telemetry batch only up to 1000 runs (10000 full-telemetry L3 runs are an overnight job).
+    # Scaling ladder: windowed L2 datasets at every rung; full L3 telemetry only up to 1000 runs.
     ladder = scales or ((1, 20, 100) if quick else (1, 100, 1000, 10000))
     for n in ladder:
         out = Path(tempfile.mkdtemp(prefix="rsbench_"))
@@ -147,7 +147,7 @@ def run_benchmarks(quick: bool = False, workers: int = 0, scales: tuple[int, ...
     rss = _rss_mb()
     if rss is not None:
         lines.append(f"\nprocess RSS at end: {rss:.0f} MB")
-    out_dir = PROJECT_ROOT / "output" / "benchmarks"
+    out_dir = output_dir() / "benchmarks"
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "latest.json").write_text(json.dumps({**results, "text": lines}, indent=2), encoding="utf-8")
     return "\n".join(lines)

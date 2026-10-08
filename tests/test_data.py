@@ -35,7 +35,6 @@ def rec():
     return run_simulation(cfg_from(fidelity=3), seed=2)
 
 
-# ------------------------------------------------------------------------------------ export
 @pytest.mark.parametrize(
     "fmt,reader", [("parquet", read_record_parquet), ("npz", read_record_npz), ("csv", read_record_csv)]
 )
@@ -91,7 +90,6 @@ def test_every_schema_column_has_finite_data_in_truth_group(rec):
         assert np.isfinite(rec.col(c.name)).all(), c.name
 
 
-# ----------------------------------------------------------------------------------- quality
 def test_quality_gate_flags_bad_records(rec):
     import copy
 
@@ -115,7 +113,6 @@ def test_quality_gate_flags_bad_records(rec):
     assert check_record(nolift)  # never left the pad -> rejected
 
 
-# --------------------------------------------------------------------------------- Monte Carlo
 def test_seed_derivation_is_deterministic_and_order_independent():
     a = derive_seeds(7, 0, 41)
     b = derive_seeds(7, 0, 41)
@@ -177,7 +174,6 @@ def test_invalid_parameter_specs():
         )
 
 
-# --------------------------------------------------------------------------------- windowing
 def _section(**kw):
     base = dict(
         kind="windowed",
@@ -240,7 +236,6 @@ def test_dataset_spec_validation():
         BatchSpec(config={}, runs=1, dataset=_section(inputs=[FeatureSpec(derived="bogus")])).validate()
 
 
-# ---------------------------------------------------------------------------- batch generation
 def _batch_spec(tmp_path, name="t", kind="telemetry", workers=1, splits=None, runs=6, shard_runs=3):
     d = {
         "name": name,

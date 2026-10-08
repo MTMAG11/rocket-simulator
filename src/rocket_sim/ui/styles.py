@@ -26,6 +26,31 @@ QPushButton {
     padding: 7px 14px;
 }
 
+#run_button {
+    background-color: #0e639c;
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 11pt;
+}
+
+#run_button:hover {
+    background-color: #1177bb;
+}
+
+#run_button:disabled {
+    background-color: #3a3d41;
+    color: #888888;
+}
+
+/* explicit colours: the light/dark Windows theme must not decide whether text is readable */
+QTextBrowser,
+QPlainTextEdit,
+QListWidget,
+QTableWidget {
+    background-color: #252526;
+    color: #e0e0e0;
+}
+
 QDoubleSpinBox,
 QComboBox {
     padding: 4px;

@@ -1,26 +1,11 @@
 # Architecture
 
-## Language decision
+## Language
 
-Python (NumPy/SciPy/PyArrow) was **kept**, after inspecting the original project (a ~1500-line 1-D/2-D Euler point mass
-plus a PySide6 GUI). Reasons, from measurements rather than taste:
-
-* A flight is 10^3-10^4 steps; throughput comes from running *many flights in parallel processes*, which Python does
-  well (`ProcessPoolExecutor`, no GIL contention across processes). Measured: ~0.3-0.6 s per 6-DOF flight on one core,
-  see [performance.md](performance.md).
-* The ML ecosystem the data feeds (NumPy, PyTorch, Parquet) is Python; no FFI boundary to maintain.
-* Rewrite cost in C++/Rust would be large and the numerical core is not the bottleneck for the current requirement.
-  If dataset throughput becomes the bottleneck the path is (in order): vectorised batch integration across runs in
-  NumPy, then a compiled core for `PointMass3DOF`/`RigidBody6DOF.derivative`. Both are isolated behind the `Dynamics`
-  interface, so the rest of the system would not change.
-
-## What was kept / dropped from the original
-
-Kept: the `.eng` motor files and the "separate motor data from physics" idea, the dark-theme GUI stylesheet. Dropped:
-rocketpy dependency (only used to parse `.eng`; replaced by a 100-line parser), the state dataclass, per-step lists, the
-grams/kg mix, the `O(n^2)` propellant lookup, the missing ground, the hard-coded 20 s stop. Bugs found in the original:
-no ground contact (rocket flew underground), apogee detected at the first `vy <= 0`, thrust angle never followed the
-vehicle, mass in grams mixed with kg.
+Python (NumPy/SciPy/PyArrow). A flight is 10^3-10^4 steps; dataset throughput comes from running many flights in parallel
+processes (about 0.3-0.6 s per 6-DOF flight per core, see [performance.md](performance.md)), and the downstream ML tooling is
+Python. If the integrator becomes the bottleneck, `PointMass3DOF`/`RigidBody6DOF.derivative` sit behind the `Dynamics` interface
+and could be replaced by a compiled core without changing the rest.
 
 ## Pipeline
 
@@ -39,16 +24,15 @@ CONFIG (YAML/JSON/TOML) --validate--> SimConfig --resolve_fidelity--> builders
                                                   ACTUATOR (delay, lag, rate/angle limits) -> gimbal angle --> DYNAMICS
 ```
 
-### Truth, measurement, estimate, command, actual (V1.2)
+### Truth, measurement, estimate, command, actual
 
-Every column in the telemetry has exactly one **role** (`rocket_sim.data.schema.role_of`): `truth` (the simulator's state,
-environment and mass properties), `measurement` (`meas_*`), `estimate` (`est_*`), `command` (`tvc_cmd_*`, `fin_cmd_*`, `fin_dcmd_*`) or
-`actual` (`tvc_*`, `fin_*`: the physical actuator state the physics used). The controller is handed a `ControlInput` whose
-`state_source` is `estimate` (the flight-computer state) or `truth` (an explicit development shortcut that is **recorded in the run
-metadata and warned about**); a controller that consumes only sensor samples (the HIL bridge) is never handed a state. The estimator is
-given measurements only (a test replays the logged measurements through a fresh filter and reproduces its estimates bit-for-bit).
-Known leak that remains by design: the controller's authority/gain schedule is derived from the as-built mass properties (a flight
-computer is assumed to know its as-designed vehicle).
+Each telemetry column has one role (`rocket_sim.data.schema.role_of`): `truth` (simulator state, environment, mass properties),
+`measurement` (`meas_*`), `estimate` (`est_*`), `command` (`tvc_cmd_*`, `fin_cmd_*`, `fin_dcmd_*`) or `actual` (`tvc_*`, `fin_*`: the
+actuator state the physics used). The controller receives a `ControlInput` whose `state_source` is `estimate` or `truth`; `truth` is a
+development shortcut that is recorded in the run metadata and warned about. A controller that consumes only sensor samples (the HIL
+bridge) gets no state. The estimator receives measurements only; a test replays the logged measurements through a fresh filter and
+reproduces its estimates bit for bit. The controller's gain schedule uses the as-built mass properties (see
+[hil.md](hil.md)).
 
 ```
 physics (truth) -> sensors -> [measurements] -> estimator -> [estimate] -> controller -> [command] -> (compute + downlink latency)
@@ -56,10 +40,8 @@ physics (truth) -> sensors -> [measurements] -> estimator -> [estimate] -> contr
    +---------------------- [actual actuator state] <- actuator (delay, lag, rate, angle limits) <-----------------------------+
 ```
 
-The physics never imports control code: `Simulation.run` owns the loop and passes only a `Controls` object (gimbal
-angles) into the dynamics. A controller is any object with `reset(ctx)` and `update(ControlInput) -> Command`
-(`rocketsim` config `controller.type: python`), so a neural network or a hardware-in-the-loop serial bridge
-(real flight computer receives `SensorReadings`, returns `Command`) plugs in without touching the physics.
+The physics never imports control code: `Simulation.run` owns the loop and passes only a `Controls` object (gimbal angles) to the
+dynamics. A controller is any object with `reset(ctx)` and `update(ControlInput) -> Command` (`controller.type: python`).
 
 ## Packages (`src/rocket_sim`)
 
@@ -83,19 +65,16 @@ angles) into the dynamics. A controller is any object with `reset(ctx)` and `upd
 | `experiments.py` | versioned dataset experiments (provenance record, reproduction check) |
 | `cli.py`, `benchmark.py`, `plotting.py`, `reporting.py`, `uncertainty.py` | front ends and helpers |
 
-## Key design decisions
+## Design decisions
 
-* **One state, one convention.** Launch-frame ENU for translation, quaternion body->launch for attitude (docs/frames.md).
-* **Truth vs. measurement are different columns** (`pos_*` vs `meas_*`/`est_*`); the estimator only sees sensor readings.
-* **Everything stochastic derives from one integer seed** via `SeedSequence`, with independent streams for wind, each
-  sensor, and parameter draws; a run is a pure function of (config, seed).
-* **The physics sees the actual actuator state**, never the command.
-* **Honest validation by construction**: flights carry a split label; holdout results go through a logged protocol keyed to a
-  fingerprint of the physics source ([validation.md](validation.md)).
-* **Versioned artefacts**: `PHYSICS_VERSION`, `SCHEMA_VERSION`, `CONFIG_VERSION`, `DATASET_VERSION`, `SIM_VERSION` stored in every record,
-  manifest and runs table.
-* **Events, not output-grid snapping**: rail exit/apogee/impact are root-found; discontinuities are step boundaries.
-* **Fail loudly**: invalid config -> `ConfigError` with the key path; NaN/diverged state -> `SimulationError`; bad runs in
-  a batch are *rejected and logged*, never silently written to a dataset.
-* **No pandas dependency on the critical path** (PyArrow only) -- this also made the project run on a machine whose
-  application-control policy blocks pandas' compiled extension.
+* One state convention: launch-frame ENU for translation, quaternion body->launch for attitude ([frames.md](frames.md)).
+* Everything stochastic derives from one integer seed via `SeedSequence`, with independent streams for wind, each sensor and
+  parameter draws; a run is a pure function of (config, seed).
+* The physics sees the actual actuator state, never the command.
+* Flights carry a split label; holdout results go through a logged protocol keyed to a fingerprint of the physics source
+  ([validation.md](validation.md)).
+* `PHYSICS_VERSION`, `SCHEMA_VERSION`, `CONFIG_VERSION`, `DATASET_VERSION` and `SIM_VERSION` are stored in every record, manifest and runs table.
+* Rail exit, apogee and impact are root-found events; discontinuities fall on step boundaries.
+* Invalid config raises `ConfigError` with the key path; a non-finite state raises `SimulationError`; bad runs in a batch are
+  rejected and logged, never written to a dataset.
+* pandas is not a dependency (PyArrow only).

@@ -1,92 +1,70 @@
-# Sensors and estimation (audit, models, roadmap)
+# Sensors and estimation
 
-Status: **simulation only.** None of the sensor models or estimators has been compared with real flight data. Default
-parameters are generic MEMS orders of magnitude, not a datasheet.
+Status: simulation only. No sensor model or estimator has been compared with real flight data. Default parameters are generic
+MEMS orders of magnitude, not a datasheet.
 
-## 0. Architecture: truth -> measurement -> estimate (V1.2, verified)
+## Data flow
 
 ```
-TRUE STATE -> SENSOR MODELS -> MEASUREMENTS -> ESTIMATOR -> ESTIMATED STATE -> CONTROLLER
-                                    \-> (HIL) protocol v2 -> FLIGHT COMPUTER (its own estimator + controller)
+true state -> sensor models -> measurements -> estimator -> estimate -> controller
+                                    \-> (HIL) protocol v2 -> flight computer (own estimator + controller)
 ```
 
-* Sensors take the true state as input and return only what a sensor would report. The telemetry keeps them in separate columns
-  (`pos_*`/`fsp_*` truth; `meas_*` measurement; `est_*` estimate) and every column has a **role** in the schema.
-* Verified by tests (`tests/test_truth_separation.py`): an ideal sensor (all error terms zero) reads the **true specific force** exactly
-  and the imperfect one does not; noise statistics match the configured sigma; saturation clips the measurement but not the truth; the
-  barometer altitude is derived from pressure by ISA inversion; seeded realisations are reproducible and independent of the truth;
-  the navigation filter is never given a truth argument; and **replaying the logged measurements through a fresh filter reproduces
-  the logged estimates bit-for-bit**, which proves nothing else influenced them.
-* The controller is fed the estimate, or the truth only if `controller.use_truth` / `state_source: truth` says so (recorded in the run
-  metadata as `controller_state_source` and warned about). `state_source: estimate` refuses to start without an estimator.
-  A test shows the controller input equals the *logged estimate*, not the true state. **Caveat:** at fidelity < 5 there is no estimator
-  and `state_source: auto` falls back to truth (with a warning).
-* Estimator state exposed in the telemetry: position, velocity, attitude and the pad-estimated **gyro bias** (`est_gyro_bias_*`, tested
-  against the true pad bias to a few mrad/s). Accelerometer bias is not estimated, and attitude uncertainty is not in the filter.
-* Sensor realism not added in V1.2 because it could not be justified and tested: vibration, temperature dependence, g-sensitivity, GPS
-  multipath. What exists is in the table below.
+* Sensors take the true state and return only what a sensor would report. Telemetry keeps them in separate columns
+  (`pos_*`/`fsp_*` truth, `meas_*` measurement, `est_*` estimate); every column has a role in the schema.
+* The controller gets the estimate, or the truth only if `controller.state_source: truth` (or `use_truth`) says so; this is recorded as
+  `controller_state_source` and warned about. `state_source: estimate` refuses to start without an estimator. At fidelity < 5 there is
+  no estimator, so `state_source: auto` falls back to truth with a warning.
+* Estimator outputs in telemetry: position, velocity, attitude and the pad-estimated gyro bias (`est_gyro_bias_*`). Accelerometer
+  bias is not estimated and attitude uncertainty is not in the filter.
+* Tests (`tests/test_truth_separation.py`): an ideal sensor reads the true specific force exactly; noise statistics match the
+  configured sigma; saturation clips the measurement but not the truth; barometer altitude is ISA-inverted from pressure;
+  realisations are seeded; the navigation filter is never given truth; replaying the logged measurements through a fresh filter
+  reproduces the logged estimates bit for bit.
 
-## 1. Sensor audit
+## Sensor models (`sensors/sensors.py`)
 
-| sensor | measures | model (`sensors/sensors.py`) | not modelled |
+| sensor | measures | modelled | not modelled |
 |---|---|---|---|
-| accelerometer | specific force, body axes | scale error, **axis misalignment** (random small rotation per run), bias + random walk, white noise, quantisation, saturation, **latency**, own rate, optional **dropout / start-up delay** | temperature drift, g-sensitivity, vibration/aliasing, cross-axis beyond misalignment, accelerometer dynamics |
-| gyroscope | angular rate, body axes | same error chain (bias default 2e-3 rad/s 1-sigma) | g-sensitivity, rate-saturation recovery, temperature, coning/sculling effects of sample-rate integration |
-| barometer | **static pressure [Pa]** | noise, bias + walk, quantisation, saturation, latency; altitude conversion is the *consumer's* job (ISA) | avionics-bay vent lag and transonic port disturbance (real altimeters show both; seen in the Prometheus data), temperature drift |
-| GPS | position + velocity, launch frame | separate **position and velocity noise** (default velocity = 0.05 x position), start-up delay (time-to-first-fix), **Bernoulli dropout**, latency, own rate (default 5 Hz) | multipath, ionosphere, COCOM altitude/velocity limits at high speed, dilution of precision, outages by attitude (antenna shadowing) |
-| magnetometer | Earth field, body axes | constant reference field (configurable, east/declination component supported), noise, bias, quantisation, misalignment | hard/soft-iron distortion, motor-current interference, field variation over the flight |
+| accelerometer | specific force, body axes | scale error, random axis misalignment per run, bias + random walk, white noise, quantisation, saturation, latency, own rate, dropout / start-up delay | temperature drift, g-sensitivity, vibration/aliasing, accelerometer dynamics |
+| gyroscope | angular rate, body axes | same chain (default bias 2e-3 rad/s 1-sigma) | g-sensitivity, rate-saturation recovery, temperature, coning/sculling |
+| barometer | static pressure [Pa] | noise, bias + walk, quantisation, saturation, latency; altitude conversion (ISA) is done by the consumer | bay vent lag and transonic port disturbance (both visible in the Prometheus data), temperature drift |
+| GPS | position + velocity, launch frame | separate position and velocity noise (default velocity = 0.05 x position), start-up delay, Bernoulli dropout, latency, own rate (default 5 Hz) | multipath, ionosphere, COCOM limits at high speed, dilution of precision, antenna shadowing |
+| magnetometer | Earth field, body axes | configurable reference field (including east/declination component), noise, bias, quantisation, misalignment | hard/soft-iron distortion, motor-current interference, field variation over the flight |
 
-Findings of the V1.1 audit (V1 behaviour, then change):
+Every channel samples on its own clock and releases the sample `latency_s` later; consumers see `*_new` flags and held values.
 
-1. The magnetometer is used **only for pad alignment** (TRIAD), never in flight. *Unchanged; documented.* In flight the
-   attitude estimate is gyro-integrated and **drifts** at the gyro bias rate.
-2. V1 assumed a field with no east component; alignment error with real declination was not captured. *Changed:* the sensor
-   uses the configured reference field and `triad_attitude` handles a general reference (tested with a 15-deg declination:
-   exact recovery, whereas the old construction is wrong by > 1e-3).
-3. V1 had no gyro-bias handling. *Changed:* with `estimator.estimate_gyro_bias` (default on) the stationary pad gyro mean is
-   subtracted after alignment (tested: bias recovered to 2e-3 rad/s with 2e-3 rad/s noise; raw rate otherwise).
-   Accelerometer bias is **not** estimated.
-4. GPS had one noise value for position and velocity and no outage model. *Changed* (see table).
-5. No sensor misalignment. *Changed* (random per-run rotation, `misalignment_std_deg`; tested as a proper rotation that preserves
-   the vector norm, with the expected Rayleigh-like statistics).
-6. Rates/latency: every channel samples on its own clock and releases its sample `latency_s` later; consumers see
-   `*_new` flags and hold values (tested: five channels at their configured rates over 5 s within 2 samples).
-7. Fidelity 6 = fidelity 5 numerically (it is a *preset*, see `physics.md`).
+The magnetometer is used only for pad alignment (TRIAD), never in flight. In flight the attitude estimate is gyro-integrated and
+drifts at the gyro bias rate. `triad_attitude` handles a general reference field (tested with a 15 deg declination). With
+`estimator.estimate_gyro_bias` (default on) the stationary pad gyro mean is subtracted after alignment.
 
-## 2. Estimator interface
+## Estimator interface
 
-`estimation/estimators.py::Estimator.update(t, readings, truth=None) -> EstimatedState` - the controller only ever sees
-the returned state (valid flag, position, velocity, quaternion, bias-corrected rates, launch-detect, extras).
+`estimation/estimators.py::Estimator.update(t, readings, truth=None) -> EstimatedState`. The controller sees only the returned
+state (valid flag, position, velocity, quaternion, bias-corrected rates, launch-detect, extras).
 
-| implementation | what it is |
+| implementation | description |
 |---|---|
 | `NullEstimator` (`type: none`) | no estimate (open loop) |
-| `TruthEstimator` (`type: truth`, fidelity >= 3) | **perfect state**, for controller development and as the upper bound when judging estimator-induced degradation. Not deployable. Tested to have exactly zero error |
-| `NavigationFilter` (`type: nav_kf`, fidelity >= 5) | **linear Kalman filter** on position/velocity (6 states) driven by accelerometer + gyro-integrated attitude (no attitude states in the covariance), baro and GPS updates, latency compensation, pad hold (ZUPT) before launch detection, TRIAD alignment, pad gyro-bias estimation |
+| `TruthEstimator` (`type: truth`, fidelity >= 3) | perfect state, for controller development and as the upper bound on estimator-induced degradation |
+| `NavigationFilter` (`type: nav_kf`, fidelity >= 5) | linear Kalman filter on position/velocity (6 states) driven by the accelerometer and gyro-integrated attitude (no attitude states in the covariance); baro and GPS updates, latency compensation, pad hold (ZUPT) before launch detection, TRIAD alignment, pad gyro-bias estimation |
 
-**There is no EKF in this repository and nothing claims to be one.**
+There is no EKF in this repository. On simulated flights (`tests/test_gnc.py`) the `nav_kf` gives about 1.3 m RMS altitude error,
+1-2 m/s RMS velocity error, and attitude within 5 degrees at 6 s, using the simulator's own noise models.
 
-Measured behaviour of the `nav_kf` on simulated flights (`tests/test_gnc.py`): altitude error ~1.3 m RMS, velocity ~1-2 m/s
-RMS, attitude within 5 degrees at 6 s with default sensors (the simulator's own noise models - not real hardware).
+## EKF design (not implemented)
 
-## 3. EKF roadmap (design only, not implemented)
+Goal: put attitude uncertainty and accelerometer/gyro biases into the filter.
 
-Purpose: remove the two structural weaknesses of `nav_kf` - attitude uncertainty is not in the filter, and accelerometer/gyro
-biases are not estimated in flight.
+* State (error-state EKF): position (3), velocity (3), attitude error (3), gyro bias (3), accelerometer bias (3); optionally baro bias.
+* Propagation: strapdown at IMU rate with the same latency handling; process noise from `noise_std` and `bias_walk_std` in `SensorCfg`.
+* Updates: baro altitude, GPS position/velocity (with dropout and start-up delay), magnetometer (before burn and in coast), gravity
+  vector and ZUPT on the pad.
+* Acceptance tests: convergence of injected biases; NEES/NIS consistency over Monte Carlo runs; degradation under GPS dropout; no
+  divergence under saturated acceleration at ignition; same `Estimator` interface; comparison with `nav_kf` and `truth` on the same seeds.
 
-* **State** (error-state / multiplicative EKF): position (3), velocity (3), attitude error (3, quaternion nominal), gyro bias
-  (3), accelerometer bias (3) = 15 states; optionally baro bias.
-* **Propagation**: strapdown at IMU rate with the same latency handling; process noise from the sensor noise densities and
-  bias random-walk parameters already in `SensorCfg` (these are the *design inputs*: `noise_std`, `bias_walk_std`).
-* **Updates**: baro altitude, GPS position/velocity (honouring dropout and start-up delay), magnetometer (before burn and
-  in coast, rejected under motor current), quasi-static gravity vector on the pad, ZUPT on the pad.
-* **Acceptance tests to write first**: convergence of injected biases; NEES/NIS consistency over Monte Carlo runs
-  (covariance honest); degradation under GPS dropout; no divergence under saturated acceleration at ignition;
-  identical interface to `Estimator` so controllers need no change; head-to-head against `nav_kf` and `truth` on the same seeds.
+## Tests
 
-## 4. Tests (`tests/test_sensors_v11.py`, `tests/test_gnc.py`)
-
-Dropout rate (30 % -> 0.30 +- 0.02), zero/full dropout, start-up delay, latency, async rates, GPS velocity vs position noise,
-default velocity ratio, GPS fix flag, misalignment (rotation, norm preserved, statistics), reproducibility with dropout, truth
-estimator, TRIAD with declination, gyro-bias recovery and its disabled case, a full flight with 30 % GPS dropout and 3 s
-start-up delay that still estimates altitude to < 5 m RMS.
+`tests/test_sensors_v11.py`, `tests/test_gnc.py`: dropout rate, start-up delay, latency, async rates, GPS velocity vs position noise,
+misalignment statistics, reproducibility, truth estimator, TRIAD with declination, gyro-bias recovery, and a full flight with 30 %
+GPS dropout and 3 s start-up delay that still estimates altitude to < 5 m RMS.

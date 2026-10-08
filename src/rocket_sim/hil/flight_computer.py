@@ -67,7 +67,6 @@ class ReferenceFlightComputer:
         self._table: list[list[Any]] = []
         self.n_ticks = 0
 
-    # ------------------------------------------------------------------------------------ init
     def reset(self, init: dict[str, Any]) -> None:
         design = init["design"]
         sensors = SensorsCfg()
@@ -116,7 +115,6 @@ class ReferenceFlightComputer:
         f = 0.0 if b[0] == a[0] else (tau - a[0]) / (b[0] - a[0])
         return float(a[1]) + f * (float(b[1]) - float(a[1]))
 
-    # ------------------------------------------------------------------------------------ tick
     def on_tick(self, tick: dict[str, Any]) -> dict[str, float]:
         if self.nav is None or self.ctrl is None:
             raise SimulationError("flight computer used before init")

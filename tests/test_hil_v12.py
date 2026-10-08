@@ -76,7 +76,6 @@ def run_hil(fc, seed=1, transport=None, uplink=None, **kw):
     return sim.run(), bridge, t
 
 
-# ------------------------------------------------------------------------------------------- protocol
 def test_encoding_is_deterministic_and_rejects_non_finite_numbers():
     a = encode({"v": 2, "type": "tick", "b": 1, "a": [1.5, 2]})
     assert a == encode({"a": [1.5, 2], "type": "tick", "v": 2, "b": 1}) and a.endswith(b"\n")
@@ -110,7 +109,6 @@ def test_missing_command_fields_default_to_zero():
     assert out["tvc_y"] == 0.02 and out["tvc_z"] == 0.0 and out["fin_roll"] == 0.0
 
 
-# ----------------------------------------------------------------------------------- the loop and the boundary
 def test_lock_step_loop_runs_and_commands_reach_the_actuator_state():
     fc = LaunchStepFC()
     rec, bridge, _ = run_hil(fc)
@@ -231,7 +229,6 @@ def test_compute_and_downlink_latency_delay_the_actuator_by_exactly_that_much():
     assert timing_report(cfg)["derived"]["command_to_actuator_latency_s"] == pytest.approx(lat)
 
 
-# ------------------------------------------------------------------------- determinism and replay
 def test_live_runs_are_bit_identical_and_replay_reproduces_without_a_flight_computer():
     rec_t = RecordingTransport(loopback(LaunchStepFC()))
     r1, _, _ = run_hil(None, transport=rec_t)
@@ -285,7 +282,6 @@ def test_a_dead_flight_computer_process_is_an_error_not_a_hang():
     pipe.close()
 
 
-# ----------------------------------------------------------------------------- closed loop with real software
 def tvc_closed_loop_cfg(extra):
     raw = read_mapping(CONFIG_G80.parent / "example_tvc_closed_loop.yaml")
     ov = {"simulation.t_max_s": 5.5, "fidelity": 4, "estimator.type": "none", **extra}
@@ -387,7 +383,6 @@ def test_replay_must_be_complete_and_uplink_parameters_are_validated():
         build_bridge({"fc": "reference", "uplink_latency_s": float("nan")})
 
 
-# ----------------------------------------------------------------------------------- configuration / CLI
 def test_build_bridge_validates_parameters(tmp_path):
     with pytest.raises(ConfigError, match="give fc"):
         build_bridge({"fc": "nonsense"})
@@ -491,7 +486,6 @@ def test_hil_v1_message_no_longer_leaks_the_flight_phase():
     assert sent and all("phase" not in m for m in sent)
 
 
-# ------------------------------------------------------------------------- round-1 review additions
 NOISY = {
     "accelerometer": {"saturation": 400.0, "noise_std": 0.05, "rate_hz": 100.0},
     "gyroscope": {"rate_hz": 400.0, "noise_std": 0.002},
@@ -657,7 +651,6 @@ def test_bridge_close_closes_the_transport():
     assert pipe.proc.poll() is not None
 
 
-# --------------------------------------------------------------------------- round-3 review additions (CLI path)
 def short_tvc_yaml(tmp_path, **controller):
     import yaml
 

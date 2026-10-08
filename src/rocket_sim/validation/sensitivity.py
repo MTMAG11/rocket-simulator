@@ -196,7 +196,6 @@ def sensitivity_markdown(res: dict[str, Any]) -> str:
     return "\n".join(L)
 
 
-# ----------------------------------------------------------------------------- model-form study
 def model_form_study(flight_sim_yaml: str | Path, casing_kg: float | None = None) -> dict[str, Any]:
     """Apogee under alternative MODEL choices, relative to the nominal configuration."""
     p = Path(flight_sim_yaml)

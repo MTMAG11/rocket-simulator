@@ -80,7 +80,6 @@ class Telemetry:
         return out
 
 
-# ---------------------------------------------------------------------------------------------
 def telemetry_from_record(rec: FlightRecord, use_sensors: bool = False) -> Telemetry:
     """Simulated telemetry. ``use_sensors`` uses meas_* columns (needs fidelity >= 4)."""
     t = rec.col("t")

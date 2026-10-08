@@ -17,6 +17,6 @@ telemetry:
   landing_altitude_m: 5
   channels:
     altitude: {time_column: 4, column: 10, uncertainty: 3.0}
-    # AltOS 'speed' column is SIGNED VERTICAL velocity (min -38 m/s on descent, 0 at apogee, trapezoid integral to
-    # apogee = 4175 m): verified by the third critic review, an earlier version of this file wrongly treated it as total speed
+    # AltOS 'speed' column is signed vertical velocity (min -38 m/s on descent, 0 at apogee; trapezoid integral to
+    # apogee = 4175 m), not total speed
     velocity_z: {time_column: 4, column: 11, uncertainty: 2.0}

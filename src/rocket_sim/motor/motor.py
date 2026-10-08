@@ -78,7 +78,6 @@ class Motor:
         self.burn_time = self.times[-1]
         self.max_thrust = max(self.thrust)
 
-    # -- derived quantities -------------------------------------------------------------------
     @property
     def casing_mass(self) -> float:
         """Motor hardware mass after burnout [kg]."""
@@ -102,7 +101,6 @@ class Motor:
         cls = int(math.ceil(math.log2(i / 1.25)))
         return chr(ord("A") + cls - 1) if cls <= 26 else "?"
 
-    # -- evaluation (t = seconds since ignition) ----------------------------------------------
     def thrust_at(self, t: float) -> float:
         """Thrust [N] at motor time t. Defined on the closed interval [0, burn_time]: the end
         points return the curve's end values (right-limit at 0, left-limit at burn_time) so that

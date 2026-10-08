@@ -193,7 +193,7 @@ tip-off effects that are not modelled. Required next step: a weighed Estes/Aerot
   motor impulse, integrator order, quaternion identities, and since V1.1: Barrowman by hand, inertia tensor vs independent
   summation, Euler equations for asymmetric bodies, control-surface force/moment analytics, mixer decoupling, actuator
   rate/lag/delay exactness, 5-step convergence ladder, conservation limits ([testing.md](testing.md)).
-* The AltOS `speed` column of the Prometheus log is signed *vertical* velocity (found by an earlier critic review); its
+* The AltOS `speed` column of the Prometheus log is signed *vertical* velocity ; its
   integral to apogee (4175 m) exceeds the barometric apogee (3904 m), so the real geometric apogee was probably 4.1-4.2 km
   and the V1 geometric "+0.03 %" was a coincidence of two errors. Barometric-equivalent comparison is used throughout.
 * V1 leave-one-out drag calibration on the three development flights was rejected (RMS 8.3 % -> 14.2 %).

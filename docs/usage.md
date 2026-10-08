@@ -2,13 +2,18 @@
 
 ## Install
 
-Use an **editable/source install** (`pip install -e .`): data files (`data/motors`, `experiments/`, benchmark output) and the registry
-are located relative to the source tree; a wheel install does not ship them. A clean install needs network access for the five
-dependencies (`pip install -e . --no-deps` works offline if they are already present).
+Start with the README's **Quick Start** (Windows executable, or `py -3.11 -m venv .venv`, `.venv\Scripts\activate`, `pip install -e .`,
+`python -m rocket_sim`). This page is the reference for what comes after.
+
+Use an **editable/source install** (`pip install -e .`): the default data (`data/motors`, `configs`, `vehicles`) is found by
+`rocket_sim.resources` relative to the source tree, which a wheel install does not ship ([packaging.md](packaging.md) lists the
+resolution order and the `ROCKETSIM_HOME` override). A clean install needs network access for the dependencies
+(`pip install -e . --no-deps` works offline if they are already present).
 
 ```bash
 python -m venv .venv && .venv/Scripts/activate        # Windows (use bin/activate elsewhere)
-pip install -e ".[gui,dev]"                           # numpy, scipy, pyarrow, pyyaml, matplotlib (+ PySide6, pytest, ruff, mypy)
+pip install -e .                                      # numpy, scipy, pyarrow, pyyaml, matplotlib, PySide6 (the GUI)
+pip install -e ".[dev]"                               # + pytest, ruff, mypy, psutil
 rocketsim check configs/example_g80.yaml
 ```
 
@@ -87,10 +92,21 @@ uncertainties (`rocket_sim/uncertainty.py`).
 
 ## GUI
 
-`rocketsim gui`: configure motor, mass, launch, wind, temperature, fidelity, timestep and integrator; run in a background
-thread; select any number of schema variables for stacked, zoomable plots (matplotlib toolbar) with event markers; scrub
-the timeline (readout + 3-D rocket orientation/trajectory/ground/wind arrow, coloured by flight phase); Summary tab;
-Data browser tab (open a dataset directory, select a run, reproduce and plot it). Large generation is headless only.
+`python -m rocket_sim` (same as `rocketsim gui`, `run_simulator.bat` or `RocketSimulator.exe`): the left panel is the run flow, **1 Vehicle**
+(bundled configs / vehicle files, or browse), **2 Motor** (every `data/motors/*.eng`, with impulse and burn time), **3 Conditions**
+(launch elevation, wind), **4 Run simulation**, **5 Results** (where this run was saved, open-folder button, optional export in
+CSV/Parquet/JSON). *Advanced settings* (collapsed) hold dry mass, thrust scale, azimuth, temperature offset, site elevation,
+fidelity, timestep, integrator and seed. Every run is written automatically to `<workspace>/output/gui_runs/<time>_<config>/`
+(`telemetry.csv`, `summary.txt`, `flight_overview.png`); the workspace is the repository (source) or `Documents\RocketSimulator`
+(executable), overridable with `ROCKETSIM_WORKSPACE`. The runs go in a background thread; the tabs hold the *Getting started* page
+(version, how it was launched, where files are, the last run), stacked zoomable graphs of any schema variables with event
+markers, a timeline scrubber with a 3-D view (orientation, trajectory, ground, wind arrow; coloured by flight phase), the Summary
+and the Data browser (open a dataset directory, reproduce and plot one run). Large generation is headless only.
+
+Launcher options: `python -m rocket_sim --version`, `--check` (data files and GUI library present?), `--self-test report.json`
+(start the GUI off-screen, run the default vehicle, write a JSON report; used to test the executable). Errors that have a
+user-level fix (missing data folder, PySide6 not installed) are shown as a message and written to
+`<workspace>/logs/gui_error.log` instead of a traceback.
 
 
 ## Component-based vehicles, control surfaces (V1.1)

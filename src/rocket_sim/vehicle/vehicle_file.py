@@ -115,7 +115,6 @@ class CompiledVehicle:
     warnings: list[str] = field(default_factory=list)
 
 
-# ------------------------------------------------------------------------------------------ helpers
 def _fail(cid: str, msg: str) -> ConfigError:
     return ConfigError(f"vehicle component {cid!r}: {msg}")
 
@@ -234,7 +233,6 @@ def _check_keys(c: dict[str, Any], cid: str) -> None:
         raise _fail(cid, f"unknown field(s) {sorted(extra)} for type {t!r}")
 
 
-# --------------------------------------------------------------------------------------- compile
 def compile_vehicle(data: dict[str, Any], base_dir: str | Path = ".", sha256: str = "") -> CompiledVehicle:
     data = copy.deepcopy(data)  # never mutate the caller's dictionary
     extra = set(data) - _TOP

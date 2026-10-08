@@ -1,4 +1,4 @@
-"""Honest reporting: numbers are shown only to the precision the model can support.
+"""Reporting: numbers are shown only to the precision the model supports.
 
 ``MODEL_UNCERTAINTY`` holds the *model-form* relative 1-sigma uncertainty of headline outputs
 when the inputs (mass, motor, drag, wind...) are known exactly. Input uncertainty is separate
