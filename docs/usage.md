@@ -224,3 +224,12 @@ Unknown keys are errors. The pad pressure is the mean before launch; altitude is
 `pressure_to_altitude_m` (your TODO, [derivations/baro_altitude.md](derivations/baro_altitude.md)); without a `pressure_column` the
 importer works without it. Saturated accelerometer samples stay in `accel_axial_ms2` and are empty in `accel_axial_valid_ms2`,
 which is the column the flight definition uses. Gaps and dropped samples are only reported.
+
+## Motor trade study (Q-01)
+
+`python scripts/q01_trade_study.py --study studies/q01.yaml --out validation_results/q01` compares motors on a TVC version of a vehicle:
+rail exit speed, peak thrust / weight, the largest correctable gimbal torque and authority time, and a closed-loop Monte Carlo success
+rate (wind, thrust misalignment, CG error) next to a no-controller reference, with Wilson intervals, two figures and a report that only
+states what the intervals support. Copy `studies/q01_template.yaml` and fill in every `null`: the added masses of the TVC hardware, the
+servo parameters (from `rocketsim fit-servo`), the dispersions and the success limits are yours; the study refuses to run with any missing.
+Definitions, the proposed success criteria and caveats: [derivations/tvc_authority.md](derivations/tvc_authority.md).

@@ -1,0 +1,44 @@
+# Q-01 trade study: Estes F15 vs AeroTech G40W on a TVC version of the vehicle.
+# Every field that is null is REQUIRED and has no default: fill in your own numbers.
+# `rocketsim`'s study runner refuses to start while any of them is missing.
+
+base_config: null            # a simulation config of the passive vehicle, e.g. ../configs/arp_block0_g40w.yaml
+
+motors:
+  - ../data/motors/Estes_F15.eng
+  - ../data/motors/AeroTech_G40W.eng
+
+# Extra mass of the TVC version, one entry per item (gimbal, servos, bigger battery ...). Positions are from the nose tip.
+added_masses:
+  - {name: gimbal, mass_kg: null, position_from_nose_m: null}
+  # - {name: servos, mass_kg: null, position_from_nose_m: null}
+  # - {name: battery_extra, mass_kg: null, position_from_nose_m: null}
+
+# Gimbal and servo (from the bench fit, `rocketsim fit-servo`)
+tvc:
+  max_angle_deg: null
+  max_rate_deg_s: null
+  time_constant_s: null
+  delay_s: null
+  deadband_deg: 0.0
+  backlash_deg: 0.0          # a non-zero value needs actuators.play_operator (your TODO)
+
+controller: {wn: 8.0, zeta: 0.8}   # tvc_attitude gains (a design choice, not a measurement)
+estimator: nav_kf                  # nav_kf | ekf
+
+disturbances:
+  wind_speed_mean_ms: null
+  wind_speed_std_ms: null
+  thrust_misalignment_deg: null    # magnitude; the direction is random
+  cg_error_m: null                 # axial CG shift (random sign), made by moving cg_shift_item
+  cg_shift_item: null              # name of a mass of the vehicle (one of added_masses, or an item of the base vehicle), or "none"
+
+# PROPOSED success definition: confirm or change it before you trust the rate.
+success:
+  max_tilt_deg: null               # e.g. a limit on the attitude excursion during the burn
+  min_rail_exit_speed_ms: null     # optional: remove or leave null to ignore
+
+reference_disturbance_torque_nm: null   # optional: reports the time with gimbal torque above this value
+settle_s: 1.0
+useful_thrust_fraction: 0.1     # smallest torque is reported while thrust is above this fraction of peak
+monte_carlo: {runs: 40, seed: 1}
