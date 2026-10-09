@@ -41,6 +41,7 @@ In the window: choose a vehicle and motor, set launch elevation and wind, and pr
 * TVC and control-fin actuator models; sensors, a linear Kalman filter and a controller interface, with truth, measurement,
   estimate, command and actual state kept separate.
 * HIL foundation: wire protocol, transports, reference flight computer and timing model.
+* Motor library: bundled thrust curves plus download from ThrustCurve.org (`rocketsim fetch-motors`, or the GUI).
 * Parallel, reproducible Monte Carlo dataset generation, and a validation protocol against real flights.
 
 ## Limitations

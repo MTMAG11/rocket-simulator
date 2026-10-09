@@ -35,7 +35,7 @@ PHASE_LABELS = {
     6: "Descent",
     7: "Landed",
 }
-BG = QtGui.QColor("#16181d")
+BG = QtGui.QColor("#14161c")
 GRID = QtGui.QColor(90, 96, 108, 110)
 TEXT = QtGui.QColor("#cfd3da")
 MAX_POINTS = 3000

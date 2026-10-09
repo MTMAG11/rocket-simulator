@@ -14,7 +14,8 @@ inspect DATASET [--run ID]      browse a dataset's manifest/runs without loading
 benchmark                       throughput of single runs, small batches, dataset generation
 check CONFIG                    validate a configuration file without simulating
 schema [--json]                 print the versioned telemetry schema
-motors                          list bundled motor files
+motors                          list motor files (bundled and downloaded)
+fetch-motors                    download thrust curves from ThrustCurve.org
 gui                             start the graphical interface
 """
 
@@ -366,15 +367,64 @@ def cmd_schema(a: argparse.Namespace) -> int:
 
 def cmd_motors(a: argparse.Namespace) -> int:
     from .motor import available_motors, load_motor
-    from .resources import motors_dir
+    from .resources import motors_dir, user_motors_dir
 
-    for p in available_motors(Path(a.dir) if a.dir else motors_dir()):
+    dirs = [Path(a.dir)] if a.dir else [motors_dir(), user_motors_dir()]
+    for p in [p for d in dirs for p in available_motors(d)]:
         m = load_motor(p)
         print(
             f"{p.name:34s} {m.designation:8s} class {m.impulse_class}  I={m.total_impulse:8.1f} Ns  "
             f"burn={m.burn_time:5.2f} s  Tpeak={m.max_thrust:8.1f} N  mp={m.propellant_mass * 1000:7.1f} g"
         )
     return 0
+
+
+def cmd_fetch_motors(a: argparse.Namespace) -> int:
+    from .errors import MotorError
+    from .motor import thrustcurve as tc
+    from .resources import user_motors_dir
+
+    if not (a.names or a.all or a.manufacturer or a.diameter or a.impulse_class):
+        raise MotorError(
+            "give motor names (e.g. G40W F15) or filters, or --all for the whole ThrustCurve.org catalogue"
+        )
+    kw: dict[str, Any] = {
+        "manufacturer": a.manufacturer,
+        "diameter_mm": a.diameter,
+        "impulse_class": a.impulse_class,
+    }
+    if a.names:
+        found: dict[str, tc.MotorInfo] = {}
+        for name in a.names:
+            hits = tc.find_by_name(name, **kw)
+            if not hits:
+                print(f"warning: no motor named {name!r} on ThrustCurve.org", file=sys.stderr)
+            found.update({m.motor_id: m for m in hits})
+        infos = list(found.values())
+    else:
+        infos = tc.search(**kw)
+    for m in infos[: 20 if len(infos) > 40 else None]:
+        print(
+            f"{m.stem:34s} class {m.impulse_class:3s} {m.diameter_mm:4.0f} mm  I={m.total_impulse_ns:8.1f} Ns  burn={m.burn_time_s:5.2f} s  [{m.availability}]"
+        )
+    if len(infos) > 40:
+        print(f"... {len(infos)} motors in total")
+    if a.list or not infos:
+        return 0 if infos else 1
+    dest = Path(a.dest) if a.dest else user_motors_dir()
+    step = max(len(infos) // 10, 1)
+    saved, failed = tc.download_motors(
+        infos,
+        dest,
+        skip_existing=not a.refresh,
+        progress=lambda i, n, name: (
+            print(f"  {i}/{n} {name}") if (n <= 20 or i % step == 0 or i == n) else None
+        ),
+    )
+    print(f"saved {len(saved)} motors to {dest}")
+    for m, why in failed:
+        print(f"warning: skipped {m.stem}: {why}", file=sys.stderr)
+    return 0 if saved else 1
 
 
 def cmd_gui(a: argparse.Namespace) -> int:
@@ -529,9 +579,20 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--json", action="store_true")
     sc.set_defaults(fn=cmd_schema)
 
-    m = sub.add_parser("motors", help="list motor files")
+    m = sub.add_parser("motors", help="list motor files (bundled and downloaded)")
     m.add_argument("--dir")
     m.set_defaults(fn=cmd_motors)
+
+    fm = sub.add_parser("fetch-motors", help="download thrust curves from ThrustCurve.org")
+    fm.add_argument("names", nargs="*", help="motor designations, e.g. G40W F15")
+    fm.add_argument("--all", action="store_true", help="the whole catalogue (about 1150 motors)")
+    fm.add_argument("--manufacturer")
+    fm.add_argument("--diameter", type=float, help="motor diameter [mm]")
+    fm.add_argument("--class", dest="impulse_class", help="impulse class letter, e.g. G")
+    fm.add_argument("--dest", help="target folder (default: <workspace>/motors)")
+    fm.add_argument("--list", action="store_true", help="only show the matches")
+    fm.add_argument("--refresh", action="store_true", help="download again even if already saved")
+    fm.set_defaults(fn=cmd_fetch_motors)
 
     g = sub.add_parser("gui", help="start the GUI")
     g.set_defaults(fn=cmd_gui)

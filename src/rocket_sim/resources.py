@@ -153,6 +153,11 @@ def workspace_dir() -> Path:
     return project_root()
 
 
+def user_motors_dir() -> Path:
+    """Motors downloaded from ThrustCurve.org (written by the user, not part of the bundle)."""
+    return workspace_dir() / "motors"
+
+
 def output_dir() -> Path:
     return workspace_dir() / "output"
 

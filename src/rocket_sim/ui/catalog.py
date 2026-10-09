@@ -11,9 +11,10 @@ from pathlib import Path
 from ..data.export import export_record
 from ..errors import RocketSimError
 from ..motor import available_motors, load_motor
+from ..motor.thrustcurve import read_sidecar
 from ..plotting import plot_overview
 from ..reporting import summary_text
-from ..resources import configs_dir, motors_dir, output_dir, resource_root, vehicles_dir
+from ..resources import configs_dir, motors_dir, output_dir, resource_root, user_motors_dir, vehicles_dir
 from ..simulation.record import FlightRecord
 
 
@@ -65,7 +66,7 @@ def list_vehicles() -> list[VehicleEntry]:
             name = raw.get("name") or p.stem
         else:
             name = (raw.get("rocket") or {}).get("name") or raw.get("name") or p.stem
-        out.append(VehicleEntry(f"{name}  [{p.name}]", p, _leading_comment(text)))
+        out.append(VehicleEntry(str(name), p, _leading_comment(text)))
     for p in sorted(vehicles_dir().glob("*.json")):
         if p.name in wrapped or p.name.endswith(".schema.json"):
             continue
@@ -75,9 +76,12 @@ def list_vehicles() -> list[VehicleEntry]:
             continue
         if isinstance(d, dict) and d.get("format") == "rocket-sim-vehicle":
             meta = d.get("metadata", {})
-            out.append(
-                VehicleEntry(f"{meta.get('name', p.stem)}  [{p.name}]", p, str(meta.get("description", "")))
-            )
+            out.append(VehicleEntry(str(meta.get("name", p.stem)), p, str(meta.get("description", ""))))
+    names = [v.label for v in out]
+    out = [
+        v if names.count(v.label) == 1 else VehicleEntry(f"{v.label} ({v.path.name})", v.path, v.description)
+        for v in out
+    ]
     if not out:
         raise RocketSimError(
             f"No vehicle configurations were found.\n\nExpected simulation configs (*.yaml) in:\n{configs_dir()}"
@@ -93,21 +97,36 @@ def motor_key(path: Path) -> str:
         return str(path)
 
 
+def _summary(p: Path) -> str | None:
+    """One-line motor description; downloaded motors use their saved catalogue data (no file parsing)."""
+    meta = read_sidecar(p)
+    if meta.get("file_total_impulse_ns"):
+        return (
+            f"{meta['file_designation']} (class {meta['impulse_class']}): {meta['file_total_impulse_ns']:.0f} N·s, "
+            f"burn {meta['file_burn_time_s']:.2f} s, {meta['file_propellant_g']:.0f} g propellant, {meta['file_diameter_mm']:.0f} mm"
+        )
+    try:
+        m = load_motor(p)
+    except RocketSimError:
+        return None  # a malformed file must not hide the others
+    return (
+        f"{m.designation} (class {m.impulse_class}): {m.total_impulse:.0f} N·s, burn {m.burn_time:.2f} s, "
+        f"{m.propellant_mass * 1000:.0f} g propellant, {m.diameter * 1000:.0f} mm"
+    )
+
+
 def list_motors() -> list[MotorEntry]:
     out: list[MotorEntry] = []
-    for p in available_motors(motors_dir()):
-        try:
-            m = load_motor(p)
-        except RocketSimError:
-            continue  # a malformed file must not hide the others
-        out.append(
-            MotorEntry(
-                p.stem,
-                motor_key(p),
-                f"{m.designation} (class {m.impulse_class}): {m.total_impulse:.0f} N·s, burn {m.burn_time:.2f} s, "
-                f"{m.propellant_mass * 1000:.0f} g propellant, {m.diameter * 1000:.0f} mm",
-            )
-        )
+    seen: set[str] = set()
+    for d in (motors_dir(), user_motors_dir()):  # bundled first: a downloaded copy never shadows it
+        for p in available_motors(d):
+            if p.stem in seen:
+                continue
+            summary = _summary(p)
+            if summary is None:
+                continue
+            seen.add(p.stem)
+            out.append(MotorEntry(p.stem, motor_key(p), summary))
     if not out:
         raise RocketSimError(f"No motor files were found.\n\nExpected motor data (*.eng) in:\n{motors_dir()}")
     return out

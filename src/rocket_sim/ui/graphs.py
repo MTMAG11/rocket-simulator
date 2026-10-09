@@ -15,7 +15,7 @@ from ..plotting import EVENT_STYLE
 from ..simulation.record import FlightRecord
 from .channels import PRESETS, Channel, available_channels, preset_ids
 
-BG, PANEL, FG, GRID = "#1e1e1e", "#252526", "#e0e0e0", "#4a4a4a"
+BG, PANEL, FG, GRID = "#12141a", "#1a1d24", "#e6e9ef", "#2b303c"
 LINE_COLORS = ["#4fc1ff", "#ff8c42", "#6adf8a", "#d78bf0", "#f2c94c", "#8fd3f4"]
 TIME_RANGES = ("Full flight", "Until apogee", "Powered flight")
 DEFAULT_PRESET = "Flight overview"

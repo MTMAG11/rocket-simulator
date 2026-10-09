@@ -35,7 +35,8 @@ from ..simulation import FlightPhase, Simulation
 from ..simulation.record import FlightRecord
 from .catalog import VehicleEntry, list_motors, list_vehicles, save_run_results
 from .graphs import GraphPanel
-from .styles import MAIN_STYLE
+from .motor_browser import MotorBrowser
+from .styles import apply_theme
 from .view3d import Trajectory3DView
 
 
@@ -77,83 +78,116 @@ class MainWindow(QtWidgets.QMainWindow):
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
         root = QtWidgets.QHBoxLayout(central)
+        root.setContentsMargins(14, 12, 14, 8)
+        root.setSpacing(14)
 
         left = QtWidgets.QWidget()
-        left.setMaximumWidth(360)
+        left.setObjectName("sidebar")
+        left.setFixedWidth(340)
         lv = QtWidgets.QVBoxLayout(left)
+        lv.setContentsMargins(0, 0, 0, 0)
+        lv.setSpacing(10)
 
-        g = QtWidgets.QGroupBox("1  Vehicle")
-        gl = QtWidgets.QVBoxLayout(g)
+        title = QtWidgets.QLabel(
+            f"<span style='font-size:15pt;font-weight:600'>Rocket Simulator</span>"
+            f"&nbsp;&nbsp;<span style='color:#7d8590'>v{app_version()}</span>"
+        )
+        title.setObjectName("brand")
+        lv.addWidget(title)
+
+        card, cl = self._card("Vehicle")
         self.vehicle_box = QtWidgets.QComboBox()
         for v in list_vehicles():
             self.vehicle_box.addItem(v.label, v)
         self.vehicle_box.currentIndexChanged.connect(self._on_vehicle_chosen)
         self.open_button = QtWidgets.QPushButton("Browse…")
+        self.open_button.setObjectName("ghost")
         self.open_button.clicked.connect(self.open_config)
         self.vehicle_info = QtWidgets.QLabel()
+        self.vehicle_info.setObjectName("muted")
         self.vehicle_info.setWordWrap(True)
-        gl.addWidget(self.vehicle_box)
-        gl.addWidget(self.vehicle_info)
-        gl.addWidget(self.open_button)
-        lv.addWidget(g)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.vehicle_box, 1)
+        row.addWidget(self.open_button)
+        cl.addLayout(row)
+        cl.addWidget(self.vehicle_info)
+        lv.addWidget(card)
 
-        g = QtWidgets.QGroupBox("2  Motor")
-        gl = QtWidgets.QVBoxLayout(g)
+        card, cl = self._card("Motor")
         self.motor_box = QtWidgets.QComboBox()
+        self.motor_box.setEditable(True)
+        self.motor_box.setInsertPolicy(QtWidgets.QComboBox.InsertPolicy.NoInsert)
+        completer = self.motor_box.completer()
+        if completer is not None:
+            completer.setFilterMode(Qt.MatchFlag.MatchContains)
+            completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.motor_info: dict[str, str] = {}
-        for m in list_motors():
-            self.motor_box.addItem(m.label, m.key)
-            self.motor_info[m.key] = m.summary
-        self.motor_box.currentIndexChanged.connect(self._on_motor_chosen)
         self.motor_label = QtWidgets.QLabel()
+        self.motor_label.setObjectName("muted")
         self.motor_label.setWordWrap(True)
-        gl.addWidget(self.motor_box)
-        gl.addWidget(self.motor_label)
-        lv.addWidget(g)
+        self._fill_motors()
+        self.motor_box.currentIndexChanged.connect(self._on_motor_chosen)
+        self.find_motors_button = QtWidgets.QPushButton("Find more motors…")
+        self.find_motors_button.setObjectName("ghost")
+        self.find_motors_button.setToolTip("Search ThrustCurve.org and add motors to the local library")
+        self.find_motors_button.clicked.connect(self.open_motor_browser)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.motor_box, 1)
+        row.addWidget(self.find_motors_button)
+        cl.addLayout(row)
+        cl.addWidget(self.motor_label)
+        lv.addWidget(card)
 
-        g = QtWidgets.QGroupBox("3  Conditions")
-        f = QtWidgets.QFormLayout(g)
+        card, cl = self._card("Conditions")
+        f = QtWidgets.QFormLayout()
+        f.setHorizontalSpacing(12)
+        f.setVerticalSpacing(8)
         self.elevation = self._spin(5.0, 90.0, 1, " deg", 1.0)
         self.wind_speed = self._spin(0.0, 40.0, 1, " m/s", 0.5)
-        self.wind_dir = self._spin(0.0, 360.0, 0, " deg (from)", 10.0)
-        f.addRow("Launch elevation:", self.elevation)
-        f.addRow("Wind speed:", self.wind_speed)
-        f.addRow("Wind from:", self.wind_dir)
-        lv.addWidget(g)
+        self.wind_dir = self._spin(0.0, 360.0, 0, " deg", 10.0)
+        f.addRow("Launch elevation", self.elevation)
+        f.addRow("Wind speed", self.wind_speed)
+        f.addRow("Wind from", self.wind_dir)
+        cl.addLayout(f)
+        lv.addWidget(card)
 
-        self.run_button = QtWidgets.QPushButton("4  Run simulation")
+        self.run_button = QtWidgets.QPushButton("Run simulation")
         self.run_button.setObjectName("run_button")
-        self.run_button.setMinimumHeight(44)
+        self.run_button.setMinimumHeight(46)
         self.run_button.clicked.connect(self.run_simulation)
         lv.addWidget(self.run_button)
 
-        g = QtWidgets.QGroupBox("5  Results")
-        gl = QtWidgets.QVBoxLayout(g)
+        card, cl = self._card("Results")
         self.results_label = QtWidgets.QPlainTextEdit()  # selectable, wraps long paths anywhere
         self.results_label.setReadOnly(True)
+        self.results_label.setObjectName("path")
         self.results_label.setWordWrapMode(QtGui.QTextOption.WrapMode.WrapAnywhere)
-        self.results_label.setMaximumHeight(96)
-        self.results_label.setPlainText(
-            "No run yet. Each run is saved in a new folder under:\n" + str(output_dir() / "gui_runs")
-        )
-        self.folder_button = QtWidgets.QPushButton("Open results folder")
+        self.results_label.setMaximumHeight(64)
+        self.results_label.setPlainText("Runs are saved under:\n" + str(output_dir() / "gui_runs"))
+        self.folder_button = QtWidgets.QPushButton("Open folder")
+        self.folder_button.setObjectName("ghost")
         self.folder_button.clicked.connect(self.open_results_folder)
-        self.export_button = QtWidgets.QPushButton("Export telemetry…")
+        self.export_button = QtWidgets.QPushButton("Export…")
+        self.export_button.setObjectName("ghost")
         self.export_button.clicked.connect(self.export_record)
         self.export_button.setEnabled(False)
-        gl.addWidget(self.results_label)
-        gl.addWidget(self.folder_button)
-        gl.addWidget(self.export_button)
-        lv.addWidget(g)
+        row = QtWidgets.QHBoxLayout()
+        row.addWidget(self.folder_button)
+        row.addWidget(self.export_button)
+        cl.addWidget(self.results_label)
+        cl.addLayout(row)
+        lv.addWidget(card)
 
-        # advanced: everything else, collapsed by default
-        self.adv_box = QtWidgets.QGroupBox("Advanced settings")
-        self.adv_box.setCheckable(True)
-        self.adv_box.setChecked(False)
-        av = QtWidgets.QVBoxLayout(self.adv_box)
-        self.adv_inner = QtWidgets.QWidget()
-        f = QtWidgets.QFormLayout(self.adv_inner)
-        f.setContentsMargins(0, 0, 0, 0)
+        self.adv_toggle = QtWidgets.QToolButton()
+        self.adv_toggle.setObjectName("disclosure")
+        self.adv_toggle.setText("Advanced settings")
+        self.adv_toggle.setCheckable(True)
+        self.adv_toggle.setArrowType(Qt.ArrowType.RightArrow)
+        self.adv_toggle.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.adv_inner, af = self._card("Advanced")
+        f = QtWidgets.QFormLayout()
+        f.setHorizontalSpacing(12)
+        f.setVerticalSpacing(8)
         self.dry_mass = self._spin(0.001, 500.0, 3, " kg", 0.01)
         self.thrust_scale = self._spin(0.5, 1.5, 3, "", 0.01)
         self.azimuth = self._spin(0.0, 360.0, 1, " deg", 5.0)
@@ -175,26 +209,36 @@ class MainWindow(QtWidgets.QMainWindow):
         self.integrator.addItems(["rk4", "midpoint", "euler"])
         self.seed = QtWidgets.QSpinBox()
         self.seed.setRange(0, 2**30)
-        f.addRow("Dry mass:", self.dry_mass)
-        f.addRow("Thrust scale:", self.thrust_scale)
-        f.addRow("Azimuth:", self.azimuth)
-        f.addRow("Temp. offset (ISA):", self.temp_offset)
-        f.addRow("Site elevation MSL:", self.site_elev)
-        f.addRow("Fidelity:", self.fidelity)
-        f.addRow("Timestep:", self.dt)
-        f.addRow("Integrator:", self.integrator)
-        f.addRow("Seed:", self.seed)
-        av.addWidget(self.adv_inner)
+        f.addRow("Dry mass", self.dry_mass)
+        f.addRow("Thrust scale", self.thrust_scale)
+        f.addRow("Azimuth", self.azimuth)
+        f.addRow("Temp. offset (ISA)", self.temp_offset)
+        f.addRow("Site elevation MSL", self.site_elev)
+        f.addRow("Fidelity", self.fidelity)
+        f.addRow("Timestep", self.dt)
+        f.addRow("Integrator", self.integrator)
+        f.addRow("Seed", self.seed)
+        af.addLayout(f)
         self.adv_inner.setVisible(False)
-        self.adv_box.toggled.connect(self.adv_inner.setVisible)
-        lv.addWidget(self.adv_box)
-        lv.addStretch()
-        root.addWidget(left)
+        self.adv_toggle.toggled.connect(self._toggle_advanced)
+        lv.addWidget(self.adv_toggle)
+        lv.addWidget(self.adv_inner)
+        lv.addStretch(1)
+
+        scroll = QtWidgets.QScrollArea()
+        scroll.setObjectName("sidebar_scroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QtWidgets.QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(left)
+        scroll.setFixedWidth(364)
+        root.addWidget(scroll)
 
         right = QtWidgets.QVBoxLayout()
-        self.key_results = QtWidgets.QLabel("")
-        self.key_results.setObjectName("key_results")
-        self.key_results.setTextFormat(Qt.TextFormat.RichText)
+        self.key_results = QtWidgets.QWidget()
+        self.key_row = QtWidgets.QHBoxLayout(self.key_results)
+        self.key_row.setContentsMargins(0, 0, 0, 0)
+        self.key_row.setSpacing(10)
         self.key_results.setVisible(False)
         right.addWidget(self.key_results)
         self.tabs = QtWidgets.QTabWidget()
@@ -238,6 +282,47 @@ class MainWindow(QtWidgets.QMainWindow):
         root.addLayout(right, 1)
         self.statusBar().showMessage("Ready")
         self.statusBar().addPermanentWidget(QtWidgets.QLabel(f"{APP_NAME} v{app_version()}"))
+
+    @staticmethod
+    def _card(title: str) -> tuple[QtWidgets.QFrame, QtWidgets.QVBoxLayout]:
+        """A titled panel; returns the frame and the layout to fill."""
+        frame = QtWidgets.QFrame()
+        frame.setObjectName("card")
+        lay = QtWidgets.QVBoxLayout(frame)
+        lay.setContentsMargins(14, 12, 14, 14)
+        lay.setSpacing(8)
+        label = QtWidgets.QLabel(title.upper())
+        label.setObjectName("card_title")
+        lay.addWidget(label)
+        return frame, lay
+
+    def _toggle_advanced(self, on: bool) -> None:
+        self.adv_inner.setVisible(on)
+        self.adv_toggle.setArrowType(Qt.ArrowType.DownArrow if on else Qt.ArrowType.RightArrow)
+
+    def _fill_motors(self, select: str | None = None) -> None:
+        """(Re)build the motor list from the bundled and downloaded libraries, keeping or choosing a selection."""
+        current = select or self.motor_box.currentData()
+        self.motor_box.blockSignals(True)
+        self.motor_box.clear()
+        self.motor_info.clear()
+        for m in list_motors():
+            self.motor_box.addItem(m.label, m.key)
+            self.motor_info[m.key] = m.summary
+        idx = self.motor_box.findData(current) if current else -1
+        if idx < 0 and select:
+            idx = self.motor_box.findText(select)
+        if idx < 0 and current:  # a motor file named by the vehicle itself, outside both libraries
+            self.motor_box.addItem(Path(str(current)).stem + " (from vehicle)", current)
+            idx = self.motor_box.count() - 1
+        self.motor_box.setCurrentIndex(max(idx, 0))
+        self.motor_box.blockSignals(False)
+        self._on_motor_chosen()
+
+    def open_motor_browser(self) -> None:
+        dlg = MotorBrowser(self)
+        dlg.motors_changed.connect(lambda stem: self._fill_motors(select=stem))
+        dlg.exec()
 
     def _spin(self, lo: float, hi: float, dec: int, suffix: str, step: float) -> QtWidgets.QDoubleSpinBox:
         s = QtWidgets.QDoubleSpinBox()
@@ -429,7 +514,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not p:
             return
         path = Path(p)
-        entry = VehicleEntry(f"{path.stem}  [{path.name}]", path, f"Loaded from {path}")
+        entry = VehicleEntry(path.stem, path, f"Loaded from {path}")
         self.vehicle_box.blockSignals(True)
         self.vehicle_box.addItem(entry.label, entry)
         self.vehicle_box.setCurrentIndex(self.vehicle_box.count() - 1)
@@ -490,12 +575,25 @@ class MainWindow(QtWidgets.QMainWindow):
             ("Flight time", "Total flight time"),
             ("Landing distance", "Landing distance from pad"),
         )
-        cells = "".join(
-            f"<td style='padding-right:26px'><span style='color:#9aa0aa;font-size:9pt'>{name}</span><br>"
-            f"<span style='font-size:13pt;font-weight:bold'>{rows.get(key, 'n/a')}</span></td>"
-            for name, key in items
-        )
-        self.key_results.setText(f"<table><tr>{cells}</tr></table>")
+        while self.key_row.count():
+            item = self.key_row.takeAt(0)
+            w = item.widget() if item is not None else None
+            if w is not None:
+                w.deleteLater()
+        for name, key in items:
+            tile = QtWidgets.QFrame()
+            tile.setObjectName("stat_tile")
+            tl = QtWidgets.QVBoxLayout(tile)
+            tl.setContentsMargins(14, 8, 14, 10)
+            tl.setSpacing(2)
+            label = QtWidgets.QLabel(name)
+            label.setObjectName("stat_label")
+            value = QtWidgets.QLabel(rows.get(key, "n/a"))
+            value.setObjectName("stat_value")
+            tl.addWidget(label)
+            tl.addWidget(value)
+            self.key_row.addWidget(tile)
+        self.key_row.addStretch(1)
         self.key_results.setVisible(True)
 
     def _toggle_play(self) -> None:
@@ -643,7 +741,7 @@ class MainWindow(QtWidgets.QMainWindow):
 def main() -> None:
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
     assert isinstance(app, QtWidgets.QApplication)
-    app.setStyleSheet(MAIN_STYLE)
+    apply_theme(app)
     w = MainWindow()
     w.show()
     app.exec()

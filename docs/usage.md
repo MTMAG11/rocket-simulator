@@ -93,7 +93,7 @@ uncertainties (`rocket_sim/uncertainty.py`).
 ## GUI
 
 `python -m rocket_sim` (same as `rocketsim gui`, `run_simulator.bat` or `RocketSimulator.exe`): the left panel is the run flow, **1 Vehicle**
-(bundled configs / vehicle files, or browse), **2 Motor** (every `data/motors/*.eng`, with impulse and burn time), **3 Conditions**
+(bundled configs / vehicle files, or browse), **2 Motor** (type to filter; bundled `data/motors/*.eng` plus downloaded ones, with impulse and burn time; *Find more motors…* searches ThrustCurve.org and saves thrust curves to the local library), **3 Conditions**
 (launch elevation, wind), **4 Run simulation**, **5 Results** (where this run was saved, open-folder button, optional export in
 CSV/Parquet/JSON). *Advanced settings* (collapsed) hold dry mass, thrust scale, azimuth, temperature offset, site elevation,
 fidelity, timestep, integrator and seed. Every run is written automatically to `<workspace>/output/gui_runs/<time>_<config>/`
@@ -147,3 +147,14 @@ controller:
   design_inertia_scale: 1.0 # flight computer's belief about I_yy/(T lever) relative to as-built (1 = perfect knowledge)
 # HIL: controller: {type: hil, params: {fc: reference}}   or   {command: [python, -m, rocket_sim.hil.flight_computer]}
 ```
+
+## Motor library (ThrustCurve.org)
+
+`rocketsim fetch-motors G40W F15 [--manufacturer AeroTech] [--dest DIR]` downloads RASP (`.eng`) thrust curves; `--list` only shows the
+matches, filters are `--manufacturer`, `--diameter MM` and `--class G`, and `--all` fetches the whole catalogue (about 1,000 files).
+Files go to `<workspace>/motors/` (the repository's `motors/`, or `Documents\RocketSimulator\motors` for the executable), or to
+`--dest` (for example `data/motors` to bundle a motor). Each file gets a `.json` sidecar with the catalogue data (certified impulse,
+burn time, ...), the file's own integrated impulse, the data source (`cert`/`mfr`/`user`), simfile id, URL and SHA-256. Certified
+data are preferred when several files exist; note that some entries only have a user-uploaded curve, whose impulse can differ
+from the certified value. `rocketsim motors` and the GUI list bundled and downloaded motors together; the simulation reads only the `.eng` file.
+Requests go to the public API at `www.thrustcurve.org/api/v1`; the client needs an internet connection only when fetching.
