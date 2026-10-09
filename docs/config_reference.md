@@ -245,6 +245,9 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `max_rate_deg_s` | `float` | 60.0 |
 | `time_constant_s` | `float` | 0.03 |
 | `delay_s` | `float` | 0.0 |
+| `deadband_deg` | `float` | 0.0 |
+| `backlash_deg` | `float` | 0.0 |
+| `max_accel_deg_s2` | `float \| None` | None |
 
 ### `controller`
 
@@ -297,6 +300,8 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `alignment_time_s` | `float` | 1.0 |
 | `gps_enabled` | `bool` | True |
 | `estimate_gyro_bias` | `bool` | True |
+| `noise_scale` | `float` | 1.0 |
+| `ekf_use_magnetometer` | `bool` | False |
 
 ### `landing_zone`
 

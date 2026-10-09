@@ -48,7 +48,7 @@ In the window: choose a vehicle and motor, set launch elevation and wind, and pr
 
 Validated only against seven 7-24 kg subsonic solid-motor flights, using apogee and altitude; only two are holdouts. Not validated:
 small rockets, transonic/supersonic flight, and any vehicle, actuator, sensor, estimator or HIL model against real hardware. The
-estimator is a linear Kalman filter, not an EKF. No hardware has been connected to the HIL interface. Numbers and the full list:
+estimators (linear Kalman filter, error-state EKF) have only been run in simulation. No hardware has been connected to the HIL interface. Numbers and the full list:
 [docs/validation.md](docs/validation.md), [docs/error_budget.md](docs/error_budget.md), [docs/status_matrix.md](docs/status_matrix.md).
 
 ## Documentation

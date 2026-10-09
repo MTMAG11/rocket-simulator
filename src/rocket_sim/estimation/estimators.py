@@ -19,9 +19,9 @@ frame, driven by gyro-integrated attitude:
                (the flight computer does not "know" the launch time). Before detection, a
                zero-velocity/zero-position update holds the pad solution.
 
-Not implemented: accelerometer/gyro bias estimation, an error-state EKF with
-attitude covariance, GPS lever arm, outlier rejection. Replace with an EKF later without
-touching the rest of the pipeline: any object with this interface works.
+Not implemented in this linear filter: accelerometer bias estimation, attitude covariance, GPS lever arm, outlier
+rejection. The error-state EKF in ekf.py (``estimator.type: ekf``) has the bias and attitude states; any object with this
+interface works.
 """
 
 from __future__ import annotations
@@ -98,7 +98,7 @@ class Estimator:
     """Interface: ``update(t, readings, truth=None) -> EstimatedState``.
 
     Implementations: ``NullEstimator`` (no estimate), ``TruthEstimator`` (perfect state, for development),
-    ``NavigationFilter`` (linear KF). A future EKF implements the same method; controllers only ever see the
+    ``NavigationFilter`` (linear KF). ``ErrorStateEKF`` (ekf.py) implements the same method; controllers only ever see the
     returned ``EstimatedState``, never the sensors.
     """
 
@@ -338,6 +338,10 @@ def build_estimator(
 ) -> Estimator:
     if cfg.type == "nav_kf":
         return NavigationFilter(cfg, sensors, gravity, site_elevation)
+    if cfg.type == "ekf":
+        from .ekf import ErrorStateEKF  # imported here: ekf.py builds on NavigationFilter from this module
+
+        return ErrorStateEKF(cfg, sensors, gravity, site_elevation)
     if cfg.type == "truth":
         return TruthEstimator()
     return NullEstimator()

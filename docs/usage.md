@@ -181,3 +181,10 @@ bin from the burnout-to-apogee coast, with a block-bootstrap random error and (i
 area and air density) a systematic error; `CdResult.combined()` gives the inverse-variance weighted mean. Method, assumptions and
 error sources: [derivations/drag_from_coast.md](derivations/drag_from_coast.md). It needs `solve_cd()` (your TODO). A command-line
 front end waits for the flight-log importer.
+
+## Estimators
+
+`estimator.type`: `none`, `nav_kf` (linear Kalman filter), `ekf` (error-state EKF), `truth` (development only). EKF options:
+`noise_scale` (multiplies the sensor noise the filter assumes, all sensors) and `ekf_use_magnetometer` (off; needs
+`attitude_measurement_jacobian`). `python scripts/compare_estimators.py --seeds 8 --out validation_results/estimator_comparison.md`
+compares the two filters on identical simulated flights. Method: [derivations/error_state_ekf.md](derivations/error_state_ekf.md).

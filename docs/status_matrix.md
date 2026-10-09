@@ -32,7 +32,9 @@ validated against a real vehicle or real hardware.** The only real-flight compar
 | Sensors: noise, bias, walk, scale, quantisation, saturation, rate, latency, dropout, start-up | yes | yes (statistics, exact timing) | yes (seeded determinism) | - | **no** | generic MEMS numbers; no vibration, temperature, g-sensitivity |
 | Truth / measurement / estimate / command / actual separation | yes | - | yes (bit-exact estimator replay, spy tests) | - | n/a | roles in the schema |
 | Linear Kalman filter | yes | partial (alignment, bias) | yes (replay) | - | **no** | not an EKF; attitude is gyro-integrated |
-| Estimator interface (null / truth / linear KF) | yes | - | yes | - | n/a | EKF: **design only** |
+| Error-state EKF (`estimator.type: ekf`): attitude, velocity, position, gyro and accelerometer bias | yes | transition matrix vs finite differences of the nominal propagation; Jacobian oracle vs a finite difference of the measurement | yes (bit-exact replay of logged measurements, symmetric PSD covariance, NEES over 8 flights, never given truth) | - | **no** | simulation only; GPS/baro only unless the magnetometer update is enabled, which needs `attitude_measurement_jacobian` (owner's TODO); initial attitude uncertainty has placeholder floors (0.5 deg tilt, 1 deg heading); not run on real data |
+| EKF vs linear KF on identical simulated flights (`scripts/compare_estimators.py`) | yes | - | yes | - | **no** | see validation_results/estimator_comparison.md; nominal: position 0.49 vs 1.13 m, velocity 0.23 vs 0.96 m/s, attitude 1.00 vs 1.16 deg RMS (8 seeds); a vertical, mostly unwinded flight is a weak test of attitude estimation |
+| Estimator interface (null / truth / linear KF / EKF) | yes | - | yes | - | n/a | |
 | HIL protocol v2, transports (loopback, pipe, record/replay) | yes | - | yes (replay, process == in-process) | - | **no** | no serial/UDP; no real hardware |
 | Explicit timing model and report | yes | yes (derived latencies) | yes | - | **no** | no clock drift/jitter model |
 | Closed-loop control through the HIL boundary | yes | - | simulation only | - | **no** | reference computer = same algorithms as in-process |

@@ -345,10 +345,16 @@ class SensorsCfg:
 
 @dataclass
 class EstimatorCfg:
-    type: str = "none"  # none | nav_kf | truth (perfect state: development/benchmark only)
+    type: str = "none"  # none | nav_kf | ekf | truth (perfect state: development/benchmark only)
     alignment_time_s: float = 1.0
     gps_enabled: bool = True
     estimate_gyro_bias: bool = True  # average the stationary pad gyro during alignment and subtract it
+    noise_scale: float = (
+        1.0  # ekf: multiplier on the sensor noise the filter assumes (1 = the configured values)
+    )
+    ekf_use_magnetometer: bool = (
+        False  # ekf: also correct attitude with the magnetometer (needs attitude_measurement_jacobian)
+    )
 
 
 @dataclass
@@ -450,9 +456,9 @@ class SimConfig:
         )
         if c.type not in ("none", "hil") and c.state_source == "estimate":
             _check(
-                self.estimator.type == "nav_kf" and self.fidelity >= 5,
+                self.estimator.type in ("nav_kf", "ekf") and self.fidelity >= 5,
                 "controller.state_source",
-                "'estimate' needs estimator.type: nav_kf at fidelity >= 5 (sensors + estimator in the loop)",
+                "'estimate' needs estimator.type: nav_kf or ekf at fidelity >= 5 (sensors + estimator in the loop)",
             )
         _check(
             self.controller.type in ("none", "tvc_attitude", "schedule", "python", "hil"),
@@ -460,19 +466,26 @@ class SimConfig:
             "must be none|tvc_attitude|schedule|python|hil",
         )
         _check(
-            self.estimator.type in ("none", "nav_kf", "truth"), "estimator.type", "must be none|nav_kf|truth"
+            self.estimator.type in ("none", "nav_kf", "ekf", "truth"),
+            "estimator.type",
+            "must be none|nav_kf|ekf|truth",
         )
         _check(
             len(self.sensors.magnetic_field_enu_t) == 3 and any(self.sensors.magnetic_field_enu_t),
             "sensors.magnetic_field_enu_t",
             "needs 3 components, not all zero",
         )
-        if self.estimator.type == "nav_kf" and self.fidelity >= 5:
+        if self.estimator.type in ("nav_kf", "ekf") and self.fidelity >= 5:
             _check(
                 self.sensors.accelerometer.enabled and self.sensors.magnetometer.enabled,
                 "estimator.type",
-                "nav_kf aligns attitude from the accelerometer AND the magnetometer: both must be enabled",
+                f"{self.estimator.type} aligns attitude from the accelerometer AND the magnetometer: both must be enabled",
             )
+        _check(
+            math.isfinite(self.estimator.noise_scale) and self.estimator.noise_scale > 0,
+            "estimator.noise_scale",
+            "must be > 0",
+        )
         if self.estimator.type != "none" and self.fidelity >= 5:
             _check(
                 self.motor.ignition_delay_s >= self.estimator.alignment_time_s,

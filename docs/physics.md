@@ -223,7 +223,7 @@ No ground rebound, tip-over or slide.
 See [sensors.md](sensors.md). The estimator is a *linear* Kalman filter on
 position/velocity with gyro-integrated attitude (TRIAD alignment on the pad with the configured reference magnetic field,
 pad gyro-bias estimation; no in-flight accelerometer/magnetometer attitude correction); it compensates known sensor
-latency; it is **not** an EKF (an EKF is a roadmap item; the `Estimator` interface is the extension point, and there is also
+latency; it is **not** an EKF (the error-state EKF is a separate estimator, `estimator.type: ekf`, see [sensors.md](sensors.md); there is also
 a `truth` estimator for development). Default sensor parameters are representative MEMS orders of magnitude, not a
 datasheet. The attitude controller is a PD pointing law with gain scheduling from the nominal motor curve.
 

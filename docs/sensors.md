@@ -48,20 +48,12 @@ state (valid flag, position, velocity, quaternion, bias-corrected rates, launch-
 | `NullEstimator` (`type: none`) | no estimate (open loop) |
 | `TruthEstimator` (`type: truth`, fidelity >= 3) | perfect state, for controller development and as the upper bound on estimator-induced degradation |
 | `NavigationFilter` (`type: nav_kf`, fidelity >= 5) | linear Kalman filter on position/velocity (6 states) driven by the accelerometer and gyro-integrated attitude (no attitude states in the covariance); baro and GPS updates, latency compensation, pad hold (ZUPT) before launch detection, TRIAD alignment, pad gyro-bias estimation |
+| `ErrorStateEKF` (`type: ekf`, fidelity >= 5) | error-state extended Kalman filter, 15 states (attitude error, velocity, position, gyro bias, accelerometer bias); same alignment, launch detection and sensor conventions as `nav_kf`; delayed barometer/GPS measurements are handled against the filter's own buffered past estimate; process noise from the configured sensors including the scale-factor/misalignment error that grows with the specific force; optional magnetometer update (`estimator.ekf_use_magnetometer`, needs `attitude_measurement_jacobian`, the owner's TODO); `estimator.noise_scale` inflates the assumed sensor noise. Derivation: [derivations/error_state_ekf.md](derivations/error_state_ekf.md) |
 
-There is no EKF in this repository. On simulated flights (`tests/test_gnc.py`) the `nav_kf` gives about 1.3 m RMS altitude error,
-1-2 m/s RMS velocity error, and attitude within 5 degrees at 6 s, using the simulator's own noise models.
-
-## EKF design (not implemented)
-
-Goal: put attitude uncertainty and accelerometer/gyro biases into the filter.
-
-* State (error-state EKF): position (3), velocity (3), attitude error (3), gyro bias (3), accelerometer bias (3); optionally baro bias.
-* Propagation: strapdown at IMU rate with the same latency handling; process noise from `noise_std` and `bias_walk_std` in `SensorCfg`.
-* Updates: baro altitude, GPS position/velocity (with dropout and start-up delay), magnetometer (before burn and in coast), gravity
-  vector and ZUPT on the pad.
-* Acceptance tests: convergence of injected biases; NEES/NIS consistency over Monte Carlo runs; degradation under GPS dropout; no
-  divergence under saturated acceleration at ignition; same `Estimator` interface; comparison with `nav_kf` and `truth` on the same seeds.
+On simulated flights (`tests/test_gnc.py`) the `nav_kf` gives about 1.3 m RMS altitude error, 1-2 m/s RMS velocity error, and attitude
+within 5 degrees at 6 s, using the simulator's own noise models. `scripts/compare_estimators.py` runs both filters on identical
+flights (wind, baro/GPS dropout, no GPS, unmodelled vibration); the table is in
+[validation_results/estimator_comparison.md](../validation_results/estimator_comparison.md). Simulation only: neither filter has run on real data.
 
 ## Tests
 
