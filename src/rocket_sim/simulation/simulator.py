@@ -55,6 +55,7 @@ from .record import (
     RunMetadata,
     compute_summary,
 )
+from .structure import apply_structure_check
 
 MAX_SPEED_SANITY = 20_000.0  # [m/s] a run exceeding this is numerically diverged
 _EPS = 1e-9
@@ -765,6 +766,7 @@ class Simulation:
             record, G0, None if lz is None else (lz.center_m[0], lz.center_m[1], lz.radius_m)
         )
         record.summary["apogee_event_altitude_m"] = ap_alt if apogee_done else None
+        apply_structure_check(record, self.cfg.structure)
         return record
 
     def _schedule_chute(self, index: int, start: float, breaks: list[float]) -> None:

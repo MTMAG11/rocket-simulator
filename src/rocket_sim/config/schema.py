@@ -355,6 +355,14 @@ class LandingZoneCfg:
 
 
 @dataclass
+class StructureCfg:
+    """Airframe load limits for the post-run screen; None disables a check. The simulator ships no default limits."""
+
+    max_q_alpha_pa_rad: float | None = None  # peak dynamic pressure x angle of attack [Pa*rad]
+    max_lateral_load_n: float | None = None  # peak aerodynamic force normal to the body axis [N]
+
+
+@dataclass
 class PhaseCfg:
     liftoff_distance_m: float = 0.01  # travel along rail/pad that counts as liftoff
 
@@ -376,6 +384,7 @@ class SimConfig:
     estimator: EstimatorCfg = field(default_factory=EstimatorCfg)
     landing_zone: LandingZoneCfg | None = None
     phases: PhaseCfg = field(default_factory=PhaseCfg)
+    structure: StructureCfg = field(default_factory=StructureCfg)
 
     def validate(self, path: str = "") -> None:
         _check(
@@ -484,6 +493,13 @@ class SimConfig:
                 self.landing_zone.radius_m > 0 and len(self.landing_zone.center_m) == 2,
                 "landing_zone",
                 "radius_m > 0 and center_m of length 2 required",
+            )
+        for key in ("max_q_alpha_pa_rad", "max_lateral_load_n"):
+            v = getattr(self.structure, key)
+            _check(
+                v is None or (math.isfinite(v) and v > 0),
+                f"structure.{key}",
+                "must be a positive number or omitted",
             )
         self.simulation.validate("simulation")
         dt = self.simulation.dt_s

@@ -22,6 +22,7 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | `estimator` | `EstimatorCfg` | (section) |
 | `landing_zone` | `LandingZoneCfg \| None` | None |
 | `phases` | `PhaseCfg` | (section) |
+| `structure` | `StructureCfg` | (section) |
 
 ### `simulation`
 
@@ -309,6 +310,13 @@ Units are in the key names (`_m`, `_kg`, `_s`, `_ms` = m/s, `_pa`, `_k`, `_hz`, 
 | key | type | default |
 |---|---|---|
 | `liftoff_distance_m` | `float` | 0.01 |
+
+### `structure`
+
+| key | type | default |
+|---|---|---|
+| `max_q_alpha_pa_rad` | `float \| None` | None |
+| `max_lateral_load_n` | `float \| None` | None |
 
 
 # Batch / dataset specification reference

@@ -158,3 +158,10 @@ burn time, ...), the file's own integrated impulse, the data source (`cert`/`mfr
 data are preferred when several files exist; note that some entries only have a user-uploaded curve, whose impulse can differ
 from the certified value. `rocketsim motors` and the GUI list bundled and downloaded motors together; the simulation reads only the `.eng` file.
 Requests go to the public API at `www.thrustcurve.org/api/v1`; the client needs an internet connection only when fetching.
+
+## Structural load screen
+
+`structure: {max_q_alpha_pa_rad: ..., max_lateral_load_n: ...}` (both optional, no defaults) makes a run report peak q·alpha and
+flag it in the summary and `meta.warnings` when it exceeds the limit. Peaks are taken before apogee above 20 m/s airspeed.
+The summary always shows the peak q·alpha (`summary["max_q_alpha_pa_rad"]`); the lateral-load check is available once
+`body_normal_force()` is implemented. Method and limits of the screen: [derivations/structural_load.md](derivations/structural_load.md).

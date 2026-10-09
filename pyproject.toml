@@ -34,7 +34,10 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
-markers = ["slow: long-running tests (deselect with -m 'not slow')"]
+markers = [
+    "slow: long-running tests (deselect with -m 'not slow')",
+    "user_todo: exercises a function left for the project owner to implement (strict xfail; run with --runxfail to see it fail)",
+]
 
 [tool.ruff]
 line-length = 110

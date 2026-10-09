@@ -35,6 +35,7 @@ validated against a real vehicle or real hardware.** The only real-flight compar
 | Closed-loop control through the HIL boundary | yes | - | simulation only | - | **no** | reference computer = same algorithms as in-process |
 | Motor thrust curves (`.eng`), propellant depletion | yes | yes (impulse vs numeric quadrature, depletion proportional to impulse) | yes | - | **no** | no static-fire data; the simulation uses the file's curve, not the catalogue values |
 | Motor library (ThrustCurve.org client, `fetch-motors`, sidecar provenance) | yes | - | yes (fake-API tests; SHA-256 of the bytes on disk; no line-ending conversion, enforced by `.gitattributes` and a test) | - | n/a | `Estes_F15` is certification-lab data; `AeroTech_G40W` is a user-contributed 2005 curve (impulse 99.0 vs 97.14 N·s certified, peak 74.3 vs 84.5 N). Certified-impulse check of the flight motors: pending (test file to be supplied) |
+| Structural load screen: peak q·alpha vs a configured limit, summary + warning | yes | yes (hand values; independent recomputation from the log) | yes | - | **no** | limits are user inputs, none ships (the TVC example has a marked placeholder); lateral load needs `body_normal_force()` (owner's TODO, see docs/derivations/structural_load.md) and is reported as unavailable until then; a screen, not a stress analysis |
 | Datasets: roles, provenance and state-source columns | yes | - | yes | - | n/a | |
 
 ## Aerodynamic data classes (for ML consumers)

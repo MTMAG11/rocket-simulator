@@ -55,6 +55,33 @@ def outside_envelope(rec: FlightRecord) -> str | None:
     return "; ".join(reasons) if reasons else None
 
 
+def structure_lines(rec: FlightRecord, width: int) -> list[str]:
+    """Peak airframe loads (before apogee) and whether they exceed the limits configured in ``structure``."""
+    s = rec.summary
+    qa = s.get("max_q_alpha_pa_rad")
+    if qa is None:
+        return []
+    lim = (rec.meta.config.get("structure") or {}) if isinstance(rec.meta.config, dict) else {}
+    out = [""]
+
+    def verdict(value: float, limit: float | None, flagged: bool) -> str:
+        if limit is None:
+            return "(no limit configured)"
+        return f"EXCEEDS limit {limit:g}" if flagged else f"within limit {limit:g}"
+
+    q_lim = lim.get("max_q_alpha_pa_rad")
+    out.append(
+        f"  {'Peak q*alpha':<{width}}  {qa:.0f} Pa*rad at t={s['max_q_alpha_time_s']:.2f} s  {verdict(float(qa), q_lim, q_lim is not None and qa > q_lim)}"
+    )
+    n = s.get("max_lateral_load_n")
+    n_lim = lim.get("max_lateral_load_n")
+    if n is not None:
+        out.append(
+            f"  {'Peak lateral load':<{width}}  {n:.0f} N  {verdict(float(n), n_lim, n_lim is not None and n > n_lim)}"
+        )
+    return out
+
+
 def summary_text(rec: FlightRecord) -> str:
     m = rec.meta
     lines = [
@@ -67,6 +94,7 @@ def summary_text(rec: FlightRecord) -> str:
     width = max(len(a) for a, _ in summary_rows(rec))
     for label, val in summary_rows(rec):
         lines.append(f"  {label:<{width}}  {val}")
+    lines.extend(structure_lines(rec, width))
     if rec.meta.fidelity >= 2:
         lines.append("")
         lines.append("  " + provisional_note())
