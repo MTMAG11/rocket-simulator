@@ -16,6 +16,7 @@ check CONFIG                    validate a configuration file without simulating
 schema [--json]                 print the versioned telemetry schema
 motors                          list motor files (bundled and downloaded)
 fetch-motors                    download thrust curves from ThrustCurve.org
+fit-servo                       fit servo parameters to bench step-response data
 gui                             start the graphical interface
 """
 
@@ -427,6 +428,27 @@ def cmd_fetch_motors(a: argparse.Namespace) -> int:
     return 0 if saved else 1
 
 
+def cmd_fit_servo(a: argparse.Namespace) -> int:
+    from .control.servo_fit import fit_servo, load_bench_csv
+
+    t, cmd, meas = load_bench_csv(
+        a.file,
+        _col(a.time_col),
+        _col(a.cmd_col),
+        _col(a.meas_col),
+        delimiter=a.delimiter,
+        time_scale=a.time_scale,
+        skip_rows=a.skip_rows,
+    )
+    fit = fit_servo(t, cmd, meas, fit_backlash=a.fit_backlash)
+    print(fit.report(a.angle_unit))
+    return 0 if fit.converged else 1
+
+
+def _col(value: str) -> str | int:
+    return int(value) if value.lstrip("-").isdigit() else value
+
+
 def cmd_gui(a: argparse.Namespace) -> int:
     from .ui.launcher import launch_gui
 
@@ -593,6 +615,31 @@ def build_parser() -> argparse.ArgumentParser:
     fm.add_argument("--list", action="store_true", help="only show the matches")
     fm.add_argument("--refresh", action="store_true", help="download again even if already saved")
     fm.set_defaults(fn=cmd_fetch_motors)
+
+    fs = sub.add_parser(
+        "fit-servo", help="fit servo delay/lag/rate limit/deadband (/backlash) to bench step-response data"
+    )
+    fs.add_argument("file", help="delimited text file with a header row")
+    fs.add_argument("--time-col", required=True, help="time column (header name or index)")
+    fs.add_argument("--cmd-col", required=True, help="commanded angle column")
+    fs.add_argument("--meas-col", required=True, help="measured angle column")
+    fs.add_argument(
+        "--time-scale",
+        type=float,
+        default=1.0,
+        help="multiply the time column by this to get seconds (ms: 0.001)",
+    )
+    fs.add_argument("--delimiter", default=",")
+    fs.add_argument("--skip-rows", type=int, default=0, help="text lines to skip before the header")
+    fs.add_argument(
+        "--angle-unit",
+        default="deg",
+        help="label for the angle unit in the report (the fit is unit-agnostic)",
+    )
+    fs.add_argument(
+        "--fit-backlash", action="store_true", help="also fit backlash (needs actuators.play_operator)"
+    )
+    fs.set_defaults(fn=cmd_fit_servo)
 
     g = sub.add_parser("gui", help="start the GUI")
     g.set_defaults(fn=cmd_gui)

@@ -23,7 +23,10 @@ validated against a real vehicle or real hardware.** The only real-flight compar
 | Aerodynamic model hierarchy + Cd/Cl/Cm interface | yes | yes | yes | trajectory with constant Cd | apogee of 7 flights (subsonic) | enhanced/supersonic: **not validated** |
 | Aerodynamic **provenance** per quantity | yes | yes (behaviour matches declared Re dependence) | - | - | n/a | declared by judgement, not computed |
 | Reynolds number dependence | skin friction only | - | - | - | **no** | pressure drag and lift are Re-independent; table models have no Re axis (stated in provenance) |
-| Actuator chain (delay, lag, rate, angle, saturation) | yes | yes (closed forms) | yes | - | **no** | left-endpoint hold -> ~h/2 extra lag; no backlash/deadband/torque limit |
+| Actuator chain (delay, lag, rate, angle, saturation) | yes | yes (closed forms) | yes | - | **no** | left-endpoint hold -> ~h/2 extra lag; no load-dependent torque model |
+| Servo deadband, acceleration (torque/inertia) limit | yes (default off; defaults bit-identical to the old chain) | yes (stopping point, exact first step, discrete ramp) | yes | - | **no** | the acceleration limit is a constant you must supply (torque limit / load inertia) |
+| Servo backlash | wiring only | hand table in the derivation (strict xfail) | with a test-local reference operator | - | **no** | `actuators.play_operator` is the owner's TODO; a non-zero backlash raises until it is implemented; feedback is modelled at the motor shaft |
+| Servo bench-data fit (`rocketsim fit-servo`): delay, lag, rate limit, deadband (backlash opt-in) | yes | recovers known parameters from data made by an independent integrator; reported standard errors match the scatter over noise draws | yes | - | **no** | not yet run on real bench data (the bench file format has not been given); the rate limit is reported as not identifiable when no step saturates it |
 | TVC force/moment from the ACTUAL state | yes | yes | yes | - | **no** | |
 | Control fins, mixer, roll control | yes | yes (force/moment/mixer) | closed-loop sim | - | **no** | linear lift, no stall/hinge model |
 | Sensors: noise, bias, walk, scale, quantisation, saturation, rate, latency, dropout, start-up | yes | yes (statistics, exact timing) | yes (seeded determinism) | - | **no** | generic MEMS numbers; no vibration, temperature, g-sensitivity |

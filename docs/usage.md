@@ -165,3 +165,11 @@ Requests go to the public API at `www.thrustcurve.org/api/v1`; the client needs 
 flag it in the summary and `meta.warnings` when it exceeds the limit. Peaks are taken before apogee above 20 m/s airspeed.
 The summary always shows the peak q·alpha (`summary["max_q_alpha_pa_rad"]`); the lateral-load check is available once
 `body_normal_force()` is implemented. Method and limits of the screen: [derivations/structural_load.md](derivations/structural_load.md).
+
+## Servo model and bench fit
+
+`tvc:` accepts `deadband_deg` (half-width of the servo dead zone), `backlash_deg` (total gear play; needs `play_operator`, see
+[derivations/servo_model.md](derivations/servo_model.md)) and `max_accel_deg_s2` (torque limit / load inertia); all are off by default.
+`rocketsim fit-servo FILE --time-col t --cmd-col cmd --meas-col meas [--time-scale 0.001] [--fit-backlash]` fits delay, time constant,
+rate limit and deadband to a bench step response (steps of different sizes, up and down; the derivation lists what each parameter
+needs) and prints one-sigma errors. Bench-file columns are chosen by name or index; the loader skips non-numeric rows.

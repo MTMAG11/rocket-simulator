@@ -67,4 +67,4 @@ fins cannot stabilise the vehicle on the rail or at low speed; TVC remains the p
   adds the sweep centroid term. Changing the legacy path would change validated results, so the difference is left in place.
 * Only motor propellant changes mass in flight; there is no per-component mass-changing flag, motor-mount geometry or off-axis motor.
 * No pods/strakes/launch lugs (use `extra_cd`), one trapezoidal fin set plus movable sets, no fin flutter or hinge moments, no
-  actuator backlash/deadband/torque limit, no structural flexibility, propellant CG fixed at the motor centre.
+  load-dependent torque (the acceleration limit is a constant), no structural flexibility, propellant CG fixed at the motor centre.

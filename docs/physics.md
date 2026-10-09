@@ -192,7 +192,7 @@ transport delay -> first-order lag (exact exponential) -> rate limit -> angle li
 boundaries (a delayed command is released at the first step at or after its due time), so it can be late by up to one step;
 the tests use aligned steps. **Hold:** the plant sees the actuator state at the *start* of each step (left-endpoint hold), i.e. an
 effective extra lag of about h/2 and a one-step response even for tau = delay = 0; in a fin-controlled run peak deflection
-varied ~5 % with dt and controller rate (apogee < 0.05 m). Not changed (it would alter physics and the holdout fingerprint). Not modelled: backlash, deadband,
+varied ~5 % with dt and controller rate (apogee < 0.05 m). Not changed (it would alter physics and the holdout fingerprint). Optional (off by default): deadband, backlash, acceleration limit ([derivations/servo_model.md](derivations/servo_model.md)). Not modelled:
 load-dependent torque limit, structural compliance.
 
 *Control surfaces* (`rocket.control_surfaces`, canards or tail fins with their own geometry, deflection, max angle, max rate,

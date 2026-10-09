@@ -281,6 +281,9 @@ class ActuatorCfg:
     max_rate_deg_s: float = 60.0
     time_constant_s: float = 0.03  # 0 -> ideal (no lag)
     delay_s: float = 0.0
+    deadband_deg: float = 0.0  # half-width of the servo dead zone (position error below this is ignored)
+    backlash_deg: float = 0.0  # total gear play; needs actuators.play_operator (owner's TODO)
+    max_accel_deg_s2: float | None = None  # torque limit / load inertia; None = no acceleration limit
 
 
 @dataclass
@@ -417,6 +420,16 @@ class SimConfig:
         a = self.tvc
         _check(a.max_angle_deg >= 0 and a.max_rate_deg_s > 0, "tvc", "max_angle_deg >= 0, max_rate_deg_s > 0")
         _check(a.time_constant_s >= 0 and a.delay_s >= 0, "tvc", "time_constant_s/delay_s must be >= 0")
+        _check(
+            all(math.isfinite(v) and v >= 0 for v in (a.deadband_deg, a.backlash_deg)),
+            "tvc",
+            "deadband_deg/backlash_deg must be finite and >= 0",
+        )
+        _check(
+            a.max_accel_deg_s2 is None or (math.isfinite(a.max_accel_deg_s2) and a.max_accel_deg_s2 > 0),
+            "tvc.max_accel_deg_s2",
+            "must be > 0 or omitted",
+        )
         _check(self.controller.rate_hz > 0, "controller.rate_hz", "must be > 0")
         c = self.controller
         _check(
