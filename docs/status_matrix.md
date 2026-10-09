@@ -33,6 +33,8 @@ validated against a real vehicle or real hardware.** The only real-flight compar
 | HIL protocol v2, transports (loopback, pipe, record/replay) | yes | - | yes (replay, process == in-process) | - | **no** | no serial/UDP; no real hardware |
 | Explicit timing model and report | yes | yes (derived latencies) | yes | - | **no** | no clock drift/jitter model |
 | Closed-loop control through the HIL boundary | yes | - | simulation only | - | **no** | reference computer = same algorithms as in-process |
+| Motor thrust curves (`.eng`), propellant depletion | yes | yes (impulse vs numeric quadrature, depletion proportional to impulse) | yes | - | **no** | no static-fire data; the simulation uses the file's curve, not the catalogue values |
+| Motor library (ThrustCurve.org client, `fetch-motors`, sidecar provenance) | yes | - | yes (fake-API tests; SHA-256 of the bytes on disk; no line-ending conversion, enforced by `.gitattributes` and a test) | - | n/a | `Estes_F15` is certification-lab data; `AeroTech_G40W` is a user-contributed 2005 curve (impulse 99.0 vs 97.14 N·s certified, peak 74.3 vs 84.5 N). Certified-impulse check of the flight motors: pending (test file to be supplied) |
 | Datasets: roles, provenance and state-source columns | yes | - | yes | - | n/a | |
 
 ## Aerodynamic data classes (for ML consumers)

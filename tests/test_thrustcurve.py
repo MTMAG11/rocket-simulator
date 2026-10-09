@@ -225,14 +225,51 @@ def test_network_errors_become_actionable_motor_errors(monkeypatch):
 
 
 # -------------------------------------------------------------------------------------- bundled
-def test_bundled_downloads_carry_provenance_and_load():
-    for stem in ("AeroTech_G40W", "Estes_F15"):
-        eng = ROOT / "data" / "motors" / f"{stem}.eng"
-        if not eng.exists():
-            pytest.skip("motor files not downloaded")
-        meta = tc.read_sidecar(eng)
-        assert meta["sha256"] == hashlib.sha256(eng.read_bytes()).hexdigest()
-        assert load_motor(eng).designation == meta["file_designation"]
+FLIGHT_MOTORS = ("AeroTech_G40W", "Estes_F15")
+
+
+@pytest.mark.parametrize("stem", FLIGHT_MOTORS)
+def test_bundled_downloads_carry_provenance_and_load(stem):
+    eng = ROOT / "data" / "motors" / f"{stem}.eng"
+    assert eng.exists(), f"flight motor file missing: {eng} (rocketsim fetch-motors --dest data/motors)"
+    meta = tc.read_sidecar(eng)
+    assert meta, f"{eng.name} has no .json sidecar"
+    assert meta["sha256"] == hashlib.sha256(eng.read_bytes()).hexdigest()
+    assert load_motor(eng).designation == meta["file_designation"]
+
+
+def test_motor_files_are_stored_without_line_ending_conversion():
+    """The sidecar SHA-256 is of the bytes on disk, so git must not rewrite line endings (data/motors/*.eng -text)."""
+    import shutil
+    import subprocess
+
+    attrs = (ROOT / ".gitattributes").read_text(encoding="utf-8").split()
+    assert "data/motors/*.eng" in attrs and "-text" in attrs
+    files = sorted((ROOT / "data" / "motors").glob("*.eng"))
+    assert files
+    crlf = [p.name for p in files if b"\r\n" in p.read_bytes()]
+    assert crlf == [], f"CRLF line endings in {crlf}: the files were converted on checkout"
+    if shutil.which("git"):
+        out = subprocess.run(
+            ["git", "check-attr", "text", str(files[0].relative_to(ROOT))],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        ).stdout
+        assert "unset" in out, out
+
+
+def test_a_crlf_conversion_would_be_detected(tmp_path):
+    """Negative control: converting a motor file to CRLF breaks both the hash check and the line-ending check."""
+    src = ROOT / "data" / "motors" / "Estes_F15.eng"
+    meta = tc.read_sidecar(src)
+    converted = tmp_path / src.name
+    converted.write_bytes(src.read_bytes().replace(b"\n", b"\r\n"))
+    assert hashlib.sha256(converted.read_bytes()).hexdigest() != meta["sha256"]
+    assert b"\r\n" in converted.read_bytes()
+    assert (
+        load_motor(converted).total_impulse > 0
+    )  # the loader itself tolerates CRLF, which is why a dedicated check is needed
 
 
 # --------------------------------------------------------------------------------------- catalog
