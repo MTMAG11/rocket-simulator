@@ -153,10 +153,12 @@ def load_channel(path: Path, delimiter: str, spec: dict[str, Any], default_unit:
     t, y = [], []
     for r in rows:
         try:
-            t.append(float(r[ti]))
-            y.append(float(r[yi]) * scale + offset)
+            tv, yv = float(r[ti]), float(r[yi]) * scale + offset
         except (ValueError, IndexError):
-            continue  # skip non-numeric / short rows (e.g. repeated headers)
+            continue  # skip non-numeric / short rows (e.g. repeated headers, empty cells)
+        if np.isfinite(tv) and np.isfinite(yv):
+            t.append(tv)
+            y.append(yv)
     if len(t) < 3:
         raise ConfigError(f"{path.name}: channel {spec['column']!r} has fewer than 3 numeric rows")
     ta, ya = np.asarray(t), np.asarray(y)

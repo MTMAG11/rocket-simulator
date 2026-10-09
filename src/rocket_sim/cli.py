@@ -17,6 +17,7 @@ schema [--json]                 print the versioned telemetry schema
 motors                          list motor files (bundled and downloaded)
 fetch-motors                    download thrust curves from ThrustCurve.org
 fit-servo                       fit servo parameters to bench step-response data
+import-log                      convert a flight-computer CSV log into standard telemetry
 gui                             start the graphical interface
 """
 
@@ -30,7 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from . import __version__
-from .errors import RocketSimError
+from .errors import ConfigError, RocketSimError
 
 
 def _parse_set(items: list[str] | None) -> dict[str, Any]:
@@ -449,6 +450,24 @@ def _col(value: str) -> str | int:
     return int(value) if value.lstrip("-").isdigit() else value
 
 
+def cmd_import_log(a: argparse.Namespace) -> int:
+    from .validation.flightlog import import_flight_log, load_log_format, write_import
+
+    fmt = load_log_format(a.format)
+    try:
+        res = import_flight_log(a.log, fmt)
+    except NotImplementedError as exc:
+        raise ConfigError(
+            f"{exc}; implement it, or remove pressure_column from the format file to import without altitude"
+        ) from exc
+    paths = write_import(res, a.out, a.stem or Path(a.log).stem)
+    print(res.report.text())
+    for p in paths.values():
+        print(f"wrote {p}")
+    print("edit the TODO fields in the .flight.yaml (sim_config, source) before `rocketsim validate`")
+    return 0
+
+
 def cmd_gui(a: argparse.Namespace) -> int:
     from .ui.launcher import launch_gui
 
@@ -640,6 +659,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--fit-backlash", action="store_true", help="also fit backlash (needs actuators.play_operator)"
     )
     fs.set_defaults(fn=cmd_fit_servo)
+
+    il = sub.add_parser(
+        "import-log", help="convert a flight-computer CSV log into standard telemetry for `validate`"
+    )
+    il.add_argument("log", help="the raw CSV log")
+    il.add_argument("--format", required=True, help="YAML file describing the log's columns and units")
+    il.add_argument("--out", required=True, help="output directory")
+    il.add_argument("--stem", help="output file name stem (default: the log's name)")
+    il.set_defaults(fn=cmd_import_log)
 
     g = sub.add_parser("gui", help="start the GUI")
     g.set_defaults(fn=cmd_gui)

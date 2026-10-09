@@ -188,3 +188,39 @@ front end waits for the flight-log importer.
 `noise_scale` (multiplies the sensor noise the filter assumes, all sensors) and `ekf_use_magnetometer` (off; needs
 `attitude_measurement_jacobian`). `python scripts/compare_estimators.py --seeds 8 --out validation_results/estimator_comparison.md`
 compares the two filters on identical simulated flights. Method: [derivations/error_state_ekf.md](derivations/error_state_ekf.md).
+
+## Flight logs
+
+`rocketsim import-log LOG.csv --format FORMAT.yaml --out DIR` converts a flight-computer CSV log into standard telemetry
+(`DIR/<name>.csv`), writes an import report (`*_import.json`: bad/duplicate/out-of-order rows, time-counter wraps, gaps, dropped
+samples, saturated intervals, launch time, pad pressure, warnings) and a skeleton `*.flight.yaml` for `rocketsim validate`
+(fill in the TODO fields: `sim_config` and the source description). Time in the output starts at the detected launch.
+
+The format file says how the log is laid out. Keys (`name`, `time_column` and `accel_columns` are required; columns are header
+names or 0-based indices):
+
+```yaml
+name: my_logger
+time_column: us            # time_unit: s | ms | us
+time_unit: us
+time_wrap: 4294967296       # counter modulus in raw units, if the clock wraps
+counter_column: seq         # sample number: gaps in it are dropped samples
+accel_columns: [ax, ay, az] # three body axes in log order
+accel_unit: g               # g | m/s2
+accel_axial: 0              # which of the three is along the nose
+accel_axial_sign: 1         # +1 or -1 so that the axial reading is +1 g at rest, nose up
+accel_full_scale: 16.0      # in accel_unit; samples at full scale are marked saturated
+accel_saturation_flag: sat  # or a column that is nonzero when saturated
+gyro_columns: [gx, gy, gz]
+gyro_unit: deg/s            # deg/s | rad/s
+pressure_column: p
+pressure_unit: hPa          # Pa | hPa | mbar | kPa
+pressure_repeats_are_holds: true   # an unchanged pressure is a held value, not a new sample
+pad_s: 2.0                  # seconds at the start of the log that are on the pad
+launch_threshold_g: 2.5     # launch: |a| above this for launch_min_duration_s (0.05 s)
+```
+
+Unknown keys are errors. The pad pressure is the mean before launch; altitude is relative to it, through
+`pressure_to_altitude_m` (your TODO, [derivations/baro_altitude.md](derivations/baro_altitude.md)); without a `pressure_column` the
+importer works without it. Saturated accelerometer samples stay in `accel_axial_ms2` and are empty in `accel_axial_valid_ms2`,
+which is the column the flight definition uses. Gaps and dropped samples are only reported.
