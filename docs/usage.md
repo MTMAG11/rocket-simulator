@@ -173,3 +173,11 @@ The summary always shows the peak q·alpha (`summary["max_q_alpha_pa_rad"]`); th
 `rocketsim fit-servo FILE --time-col t --cmd-col cmd --meas-col meas [--time-scale 0.001] [--fit-backlash]` fits delay, time constant,
 rate limit and deadband to a bench step response (steps of different sizes, up and down; the derivation lists what each parameter
 needs) and prints one-sigma errors. Bench-file columns are chosen by name or index; the loader skips non-numeric rows.
+
+## Drag from flight data
+
+`rocket_sim.validation.drag_fit.estimate_cd(t, altitude, mass_kg=..., ref_diameter_m=..., accel_axial=(t_acc, f_x))` returns Cd per Mach
+bin from the burnout-to-apogee coast, with a block-bootstrap random error and (if you pass the relative uncertainties of the mass,
+area and air density) a systematic error; `CdResult.combined()` gives the inverse-variance weighted mean. Method, assumptions and
+error sources: [derivations/drag_from_coast.md](derivations/drag_from_coast.md). It needs `solve_cd()` (your TODO). A command-line
+front end waits for the flight-log importer.
