@@ -92,18 +92,24 @@ uncertainties (`rocket_sim/uncertainty.py`).
 
 ## GUI
 
-`python -m rocket_sim` (same as `rocketsim gui`, `run_simulator.bat` or `RocketSimulator.exe`): the left panel is the run flow, **1 Vehicle**
-(bundled configs / vehicle files, or browse), **2 Motor** (type to filter; bundled `data/motors/*.eng` plus downloaded ones, with impulse and burn time; *Find more motors…* searches ThrustCurve.org and saves thrust curves to the local library), **3 Conditions**
-(launch elevation, wind), **4 Run simulation**, **5 Results** (where this run was saved, open-folder button, optional export in
-CSV/Parquet/JSON). *Advanced settings* (collapsed) hold dry mass, thrust scale, azimuth, temperature offset, site elevation,
-fidelity, timestep, integrator and seed. Every run is written automatically to `<workspace>/output/gui_runs/<time>_<config>/`
+`python -m rocket_sim` (same as `rocketsim gui`, `run_simulator.bat` or `RocketSimulator.exe`) is written for beginners. The left panel is
+three numbered boxes and a **Launch!** button: **1 Pick a rocket** (grouped list of bundled rockets with a one-line description and size;
+*Open my own rocket file...* loads another), **2 Pick an engine** (type to filter; bundled `data/motors/*.eng` plus downloaded ones, each
+described in plain words; a green/yellow/red line says whether the engine fits and can lift the rocket, and a red one blocks the launch;
+*Find more engines...* searches ThrustCurve.org and saves thrust curves to the local library), **3 Launch angle and wind** (with a compass
+sentence for the wind). Below are *Your flight is saved here* (open-folder button, optional export in CSV/Parquet/JSON) and a collapsed
+*More settings (for experts)* card (empty weight, engine strength, launch direction, temperature, site height, detail level, step size,
+method, seed). The **Help** button (top right, or F1) opens a pop-out panel that explains every control and result; the small **?** buttons
+on each box open it at the matching topic. Every run is written automatically to `<workspace>/output/gui_runs/<time>_<config>/`
 (`telemetry.csv`, `summary.txt`, `flight_overview.png`); the workspace is the repository (source) or `Documents\RocketSimulator`
-(executable), overridable with `ROCKETSIM_WORKSPACE`. A strip of key results (apogee, max speed, Mach, burnout, flight time, landing distance) appears after a run. Tabs: *Getting started*;
-*Graphs* (channels grouped as Trajectory, Velocity, Acceleration, Attitude, Forces, Mass and stability, Atmosphere, Control, Sensors,
-Estimation; each has a readable title and unit, with presets, search, a time-range selector and event markers; the cursor follows the
-timeline); *3D view* (orbit with left drag, pan with right drag, wheel to zoom, double-click to reset, Isometric/Side/Top buttons,
-Follow rocket; true-scale ground grid, trajectory coloured by flight phase, thrust and wind markers); *Summary*; *Data browser*
-(open a dataset directory, reproduce and plot one run). Play animates the timeline at 1-50x. Large generation is headless only.
+(executable), overridable with `ROCKETSIM_WORKSPACE`. After a run a strip of tiles shows highest point, top speed, engine time, flight time
+and landing distance, and *Start here* turns into a short story of the flight. Tabs: *Start here*; *Charts* (channels grouped as Trajectory,
+Velocity, Acceleration, Attitude, Forces, Mass and stability, Atmosphere, Control, Sensors, Estimation; presets, search, a time-range
+selector and event markers; the cursor follows the timeline); *Watch it fly* (orbit with left drag, pan with right drag, wheel to zoom,
+double-click to reset, Angled/Side/From above buttons, Follow the rocket; true-scale ground grid, trajectory coloured by flight phase,
+thrust and wind markers); *Numbers*; *Saved runs (experts)* (open a folder of many runs, reproduce and plot one). Play replays the flight at
+1-50x. Large generation is headless only. The bundled rockets are illustrative lumped-mass examples (`configs/catalog.yaml` gives their
+titles and descriptions), not measured vehicles.
 
 Launcher options: `python -m rocket_sim --version`, `--check` (data files and GUI library present?), `--self-test report.json`
 (start the GUI off-screen, run the default vehicle, write a JSON report; used to test the executable). Errors that have a

@@ -1,0 +1,22 @@
+# Stubby rocket: short and wide. Illustrative numbers, not a real kit.
+config_version: 1
+name: rocket_stubby
+fidelity: 3
+simulation: {dt_s: 0.01, descent_dt_s: 0.05, t_max_s: 300, integrator: rk4}
+rocket:
+  name: Stubby rocket
+  body_diameter_m: 0.10
+  body_length_m: 0.45
+  nose: {shape: cone, length_m: 0.10}
+  fins: {count: 4, root_chord_m: 0.12, tip_chord_m: 0.05, span_m: 0.07, sweep_m: 0.07, thickness_m: 0.003, position_from_nose_m: 0.33}
+  dry_mass_kg: 0.45
+  cg_from_nose_m: 0.11
+  parachutes:
+    - {cd: 1.5, diameter_m: 0.7, trigger: apogee, delay_s: 0.0}
+motor:
+  file: data/motors/AeroTech_G80T.eng
+environment:
+  atmosphere: {model: isa}
+  gravity: {model: inverse_square}
+  wind: {model: constant, speed_ms: 2.0, direction_from_deg: 270}
+launch: {elevation_deg: 90, azimuth_deg: 0, rail_length_m: 1.2}

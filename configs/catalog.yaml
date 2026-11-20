@@ -1,0 +1,23 @@
+# What the simulator window shows for each rocket: a short title, one friendly sentence, and whether it is a starter rocket
+# or an advanced experiment. Files that are not listed here still appear (under "Other").
+rockets:
+  - {file: rocket_mini.yaml, title: Mini rocket, level: starter,
+     blurb: "Tiny and light, on a small A-size engine. A good first flight."}
+  - {file: rocket_backyard.yaml, title: Backyard rocket, level: starter,
+     blurb: "A light rocket for a medium engine, the kind you could fly in a park."}
+  - {file: example_g80.yaml, title: Sport rocket, level: starter,
+     blurb: "A medium-size rocket on a bigger G-size engine."}
+  - {file: rocket_needle.yaml, title: Needle rocket, level: starter,
+     blurb: "Long and thin. Try it with different engines."}
+  - {file: rocket_stubby.yaml, title: Stubby rocket, level: starter,
+     blurb: "Short and wide. Compare it with the Needle rocket."}
+  - {file: rocket_three_inch.yaml, title: Three-inch rocket, level: starter,
+     blurb: "Wide and sturdy, with a small engine in the middle."}
+  - {file: rocket_high_power.yaml, title: High-power rocket, level: starter,
+     blurb: "Big and heavy, with a huge K-size engine. The most powerful rocket here."}
+  - {file: example_components.yaml, title: Two-size rocket (built from parts), level: advanced,
+     blurb: "Made from separate parts: a wide top, a narrow bottom and a tapered tail. Shows how the computer adds up the parts."}
+  - {file: example_vehicle_sim.yaml, title: Vehicle-file demo, level: advanced,
+     blurb: "Built from a vehicle.json file: an example of how to describe your own rocket."}
+  - {file: example_tvc_closed_loop.yaml, title: Steering-engine experiment, level: advanced,
+     blurb: "A wobbly rocket that a steerable engine keeps upright. It tumbles after the engine stops, on purpose."}

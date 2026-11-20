@@ -17,7 +17,7 @@ from .channels import PRESETS, Channel, available_channels, preset_ids
 
 BG, PANEL, FG, GRID = "#12141a", "#1a1d24", "#e6e9ef", "#2b303c"
 LINE_COLORS = ["#4fc1ff", "#ff8c42", "#6adf8a", "#d78bf0", "#f2c94c", "#8fd3f4"]
-TIME_RANGES = ("Full flight", "Until apogee", "Powered flight")
+TIME_RANGES = ("Whole flight", "Up to the highest point", "While the engine pushes")
 DEFAULT_PRESET = "Flight overview"
 
 
@@ -169,9 +169,9 @@ class GraphPanel(QtWidgets.QWidget):
         assert rec is not None
         ev = {e.name: e.t for e in rec.events}
         mode = self.range_box.currentText()
-        if mode == "Until apogee" and "apogee" in ev:
+        if mode == "Up to the highest point" and "apogee" in ev:
             return ev["apogee"] * 1.05
-        if mode == "Powered flight" and "burnout" in ev:
+        if mode == "While the engine pushes" and "burnout" in ev:
             return max(ev["burnout"] * 1.5, ev["burnout"] + 1.0)
         return None
 

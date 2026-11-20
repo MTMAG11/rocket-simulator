@@ -169,7 +169,7 @@ def test_vehicle_and_motor_catalog():
     assert not any("batch" in n or "dataset" in n or "experiment" in n or "domain" in n for n in names)
     assert not any(n == "example_tvc_demo.json" for n in names)  # already wrapped by a config: listed once
     motors = list_motors()
-    assert {m.label for m in motors} >= {"AeroTech_G80T", "AeroTech_K828FJ", "Estes_E16"}
+    assert {m.label for m in motors} >= {"AeroTech G80T", "AeroTech K828FJ", "Estes E16"}
     assert all(m.key.startswith("data/motors/") for m in motors)  # portable: relative to the resource root
 
 
@@ -200,20 +200,24 @@ def test_window_shows_version_and_how_it_was_launched(window):
     assert SIM_VERSION in window.windowTitle()
     page = window.start_page.toPlainText()
     assert SIM_VERSION in page and "python -m rocket_sim" in page
-    assert window.tabs.tabText(0) == "Getting started"
+    assert window.tabs.tabText(0) == "Start here"
 
 
 def test_every_listed_vehicle_loads_and_selects_its_own_motor(window):
+    from rocket_sim.ui.catalog import VehicleEntry
+
     for i in range(window.vehicle_box.count()):
-        window.vehicle_box.setCurrentIndex(i)
         entry = window.vehicle_box.itemData(i)
+        if not isinstance(entry, VehicleEntry):
+            continue  # a heading
+        window.vehicle_box.setCurrentIndex(i)
         assert window.vehicle_box.currentIndex() == i
         assert window.base_path == entry.path
         assert window.motor_box.currentText()  # the vehicle's own motor, never blank
         assert window.dialogs == [], window.dialogs
     # the vehicle-file based entry names the K828FJ motor of vehicles/example_tvc_demo.json
     window.vehicle_box.setCurrentIndex(
-        [v.path.name for v in map(window.vehicle_box.itemData, range(window.vehicle_box.count()))].index(
+        [getattr(v, "path", Path()).name for v in map(window.vehicle_box.itemData, range(window.vehicle_box.count()))].index(
             "example_vehicle_sim.yaml"
         )
     )
@@ -228,14 +232,14 @@ def test_run_saves_results_and_shows_where(window, tmp_path):
     assert d is not None and d.parent == tmp_path / "ws" / "output" / "gui_runs"
     assert {p.name for p in d.iterdir()} >= {"telemetry.csv", "summary.txt", "flight_overview.png"}
     assert str(d) in window.results_label.toPlainText()
-    assert "Last run" in window.start_page.toPlainText()
+    assert "Your flight" in window.start_page.toPlainText()
     assert "Apogee" in window.summary_text.toPlainText()
 
 
 def test_choosing_another_motor_changes_the_flight(window):
     window.run_simulation(blocking=True)
     a = window.record.summary["apogee_m"]
-    window.motor_box.setCurrentIndex(window.motor_box.findText("Estes_E16"))
+    window.motor_box.setCurrentIndex(window.motor_box.findText("Estes E16"))
     window.run_simulation(blocking=True)
     b = window.record.summary["apogee_m"]
     assert abs(a - b) > 20.0 and window.dialogs == []

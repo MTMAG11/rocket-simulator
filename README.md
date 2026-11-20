@@ -29,7 +29,7 @@ If PowerShell blocks `activate`, run `Set-ExecutionPolicy -Scope CurrentUser Rem
 `.venv\Scripts\python.exe -m rocket_sim` directly. Later, double-click `run_simulator.bat`. `python -m rocket_sim --check`
 verifies the installation.
 
-In the window: choose a vehicle and motor, set launch elevation and wind, and press Run simulation. Results are saved under
+In the window: choose a rocket and an engine, set the angle and wind, and press Launch! (the Help button or F1 explains everything). Results are saved under
 `output/gui_runs/`. The bundled vehicles are placeholders, not measured rockets. Command-line tools: `rocketsim --help`
 ([docs/usage.md](docs/usage.md)).
 

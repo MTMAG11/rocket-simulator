@@ -1,0 +1,22 @@
+# Backyard rocket: a light rocket for a 29 mm engine, the kind you fly in a park. Illustrative numbers, not a real kit.
+config_version: 1
+name: rocket_backyard
+fidelity: 3
+simulation: {dt_s: 0.01, descent_dt_s: 0.05, t_max_s: 300, integrator: rk4}
+rocket:
+  name: Backyard rocket
+  body_diameter_m: 0.034
+  body_length_m: 0.65
+  nose: {shape: ogive, length_m: 0.12}
+  fins: {count: 4, root_chord_m: 0.08, tip_chord_m: 0.035, span_m: 0.055, sweep_m: 0.045, thickness_m: 0.002, position_from_nose_m: 0.54}
+  dry_mass_kg: 0.20
+  cg_from_nose_m: 0.33
+  parachutes:
+    - {cd: 1.5, diameter_m: 0.45, trigger: apogee, delay_s: 0.0}
+motor:
+  file: data/motors/Estes_F15.eng
+environment:
+  atmosphere: {model: isa}
+  gravity: {model: inverse_square}
+  wind: {model: constant, speed_ms: 2.0, direction_from_deg: 270}
+launch: {elevation_deg: 90, azimuth_deg: 0, rail_length_m: 1.2}

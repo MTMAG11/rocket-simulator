@@ -1,0 +1,22 @@
+# Needle rocket: long and thin. Illustrative numbers, not a real kit.
+config_version: 1
+name: rocket_needle
+fidelity: 3
+simulation: {dt_s: 0.01, descent_dt_s: 0.05, t_max_s: 600, integrator: rk4}
+rocket:
+  name: Needle rocket
+  body_diameter_m: 0.034
+  body_length_m: 1.20
+  nose: {shape: ogive, length_m: 0.25}
+  fins: {count: 4, root_chord_m: 0.09, tip_chord_m: 0.04, span_m: 0.05, sweep_m: 0.05, thickness_m: 0.002, position_from_nose_m: 1.06}
+  dry_mass_kg: 0.22
+  cg_from_nose_m: 0.68
+  parachutes:
+    - {cd: 1.5, diameter_m: 0.55, trigger: apogee, delay_s: 0.0}
+motor:
+  file: data/motors/Estes_F15.eng
+environment:
+  atmosphere: {model: isa}
+  gravity: {model: inverse_square}
+  wind: {model: constant, speed_ms: 2.0, direction_from_deg: 270}
+launch: {elevation_deg: 90, azimuth_deg: 0, rail_length_m: 1.5}

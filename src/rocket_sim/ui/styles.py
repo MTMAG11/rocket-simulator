@@ -44,6 +44,12 @@ QPushButton#primary:pressed, QPushButton#run_button:pressed {{ background: {ACCE
 QPushButton#primary:disabled, QPushButton#run_button:disabled {{ background: {RAISED}; color: #6b7280; }}
 QPushButton#run_button {{ font-size: 11pt; border-radius: 9px; }}
 
+QLabel#fit {{ font-size: 9pt; }}
+QToolButton#help_chip {{ background: {RAISED}; border: 1px solid {BORDER}; border-radius: 10px; min-width: 20px; max-width: 20px; min-height: 20px; max-height: 20px; color: {MUTED}; font-weight: 600; }}
+QToolButton#help_chip:hover {{ border-color: {ACCENT}; color: {TEXT}; }}
+QPushButton#help_button {{ background: {ACCENT}; border: none; color: white; font-weight: 600; padding: 5px 14px; margin: 3px 4px; }}
+QPushButton#help_button:hover {{ background: {ACCENT_HOVER}; }}
+QDockWidget::title {{ background: {SURFACE}; padding: 8px; }}
 QToolButton#disclosure {{ background: transparent; border: none; color: {MUTED}; padding: 4px 2px; text-align: left; }}
 QToolButton#disclosure:hover {{ color: {TEXT}; }}
 

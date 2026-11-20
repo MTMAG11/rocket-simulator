@@ -283,9 +283,9 @@ def test_library_motors_are_listed_after_bundled_ones(tmp_path, monkeypatch):
     tc.save_motor(shadow, [{"text": RASP.replace("G40W", "G80T")}], tmp_path / "motors")
     entries = list_motors()
     labels = [e.label for e in entries]
-    assert "ACME_H123" in labels and labels.index("AeroTech_G80T") < labels.index("ACME_H123")
-    assert labels.count("AeroTech_G80T") == 1  # a downloaded copy never shadows the bundled motor
-    h = next(e for e in entries if e.label == "ACME_H123")
+    assert "ACME H123" in labels and labels.index("AeroTech G80T") < labels.index("ACME H123")
+    assert labels.count("AeroTech G80T") == 1  # a downloaded copy never shadows the bundled motor
+    h = next(e for e in entries if e.label == "ACME H123")
     assert h.key.endswith("ACME_H123.eng") and "H123" in h.summary
 
 
@@ -373,7 +373,7 @@ def test_main_window_picks_up_downloaded_motors(qapp, tmp_path, monkeypatch):
     info = tc.MotorInfo.from_api(api_motor(9, abbrev="ACME", des="H123"))
     tc.save_motor(info, [{"text": RASP.replace("G40W", "H123")}], tmp_path / "motors")
     w._fill_motors(select="ACME_H123")
-    assert w.motor_box.count() == n + 1 and w.motor_box.currentText() == "ACME_H123"
+    assert w.motor_box.count() == n + 1 and w.motor_box.currentText() == "ACME H123"
     assert "H123" in w.motor_label.text()
     w.close()
     assert json.loads((tmp_path / "motors" / "ACME_H123.json").read_text())["designation"] == "H123"

@@ -1,0 +1,22 @@
+# High-power rocket: a big, heavy 4-inch rocket on a huge 54 mm K-class engine. Illustrative numbers, not a real kit.
+config_version: 1
+name: rocket_high_power
+fidelity: 3
+simulation: {dt_s: 0.01, descent_dt_s: 0.05, t_max_s: 600, integrator: rk4}
+rocket:
+  name: High-power rocket
+  body_diameter_m: 0.102
+  body_length_m: 1.80
+  nose: {shape: ogive, length_m: 0.35}
+  fins: {count: 4, root_chord_m: 0.25, tip_chord_m: 0.10, span_m: 0.14, sweep_m: 0.15, thickness_m: 0.005, position_from_nose_m: 1.52}
+  dry_mass_kg: 8.0
+  cg_from_nose_m: 1.05
+  parachutes:
+    - {cd: 1.5, diameter_m: 1.8, trigger: apogee, delay_s: 0.0}
+motor:
+  file: data/motors/AeroTech_K828FJ.eng
+environment:
+  atmosphere: {model: isa}
+  gravity: {model: inverse_square}
+  wind: {model: constant, speed_ms: 3.0, direction_from_deg: 270}
+launch: {elevation_deg: 90, azimuth_deg: 0, rail_length_m: 3.0}

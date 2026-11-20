@@ -1,0 +1,22 @@
+# Mini rocket: a tiny, light rocket on a small A-size engine. Illustrative numbers, not a real kit.
+config_version: 1
+name: rocket_mini
+fidelity: 3
+simulation: {dt_s: 0.005, descent_dt_s: 0.05, t_max_s: 300, integrator: rk4}
+rocket:
+  name: Mini rocket
+  body_diameter_m: 0.022
+  body_length_m: 0.30
+  nose: {shape: ogive, length_m: 0.07}
+  fins: {count: 3, root_chord_m: 0.05, tip_chord_m: 0.02, span_m: 0.035, sweep_m: 0.03, thickness_m: 0.0015, position_from_nose_m: 0.23}
+  dry_mass_kg: 0.030
+  cg_from_nose_m: 0.15
+  parachutes:
+    - {cd: 1.5, diameter_m: 0.25, trigger: apogee, delay_s: 0.0}
+motor:
+  file: data/motors/Klima_A6.eng
+environment:
+  atmosphere: {model: isa}
+  gravity: {model: inverse_square}
+  wind: {model: constant, speed_ms: 2.0, direction_from_deg: 270}
+launch: {elevation_deg: 90, azimuth_deg: 0, rail_length_m: 1.0}

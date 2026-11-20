@@ -78,7 +78,7 @@ def test_graph_panel_draws_named_axes_with_units(qapp, rec):
     g._set_checked(["position"])
     (ax,) = g.figure.axes
     assert [t.get_text() for t in ax.get_legend().get_texts()] == ["East", "North", "Up"]
-    g.range_box.setCurrentText("Until apogee")
+    g.range_box.setCurrentText("Up to the highest point")
     (ax,) = g.figure.axes  # the figure is rebuilt on every change
     tmax = ax.get_xlim()[1]
     assert tmax < rec.col("t")[-1] and tmax >= rec.summary["apogee_time_s"]
